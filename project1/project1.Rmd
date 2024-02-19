@@ -1,0 +1,107 @@
+---
+title: "Project 1"
+author: "Gabriela Levenfeld Sabau"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: false
+    number_sections: false
+    highlight: tango
+    latex_engine: xelatex
+    fig_caption: true
+    extra_dependencies:
+      - geometry
+bibliography: references.bib
+nocite: '@*'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
+```
+
+```{r load_libraries, include=FALSE}
+library(skimr)
+library(caret) # For split the dataset
+library(tidyverse) # For glimpse
+```
+
+# Telco Customer Churn
+
+### Available Data
+
+TODO: Write
+- Link source
+- Pequeña descripción sobre el dataset
+
+## Download data
+
+```{r load_data}
+data <- read.csv("Telco-Customer-Churn.csv", header = TRUE,sep = ",")
+```
+
+
+```{r small_EDA}
+# Small Exploratory Data Analysis
+skim(data)
+# Presents results for every column; the statistics it provides depend on the class of the variable
+
+glimpse(data)
+
+# For visualize the first 2 rows
+head(data, 2)
+```
+
+
+```{r}
+# Counting NA
+colSums(is.na(data)) # 11 NA's in TotalCharges
+
+colSums(is.na(data))/nrow(data)
+percentage_na <- colSums(is.na(data))/nrow(data)*100 # In %
+sort(percentage_na, decreasing = TRUE)
+```
+
+```{r}
+table(data$Churn)
+```
+
+```{r}
+# Split into training and testing set
+set.seed(1234) # For reproducibility
+index <- createDataPartition(data$Churn, p=0.8, list=FALSE)
+
+X_train <- data[index,]
+X_test <- data[-index,]
+y_train <- data[index,]$Churn
+y_test <- data[-index,]$Churn
+
+# In order to check proportion are still the same
+table(data$Churn)/length(data$Churn)
+table(X_train$Churn)/length(X_train$Churn)
+table(X_test$Churn)/length(X_test$Churn)
+```
+
+
+### Exploratory Data Analysis (EDA)
+
+*Some ideas*
+REVIEW: some ideas to check for
+Working with real data can be challenging-
+The data can be:
+- Be stored in different formats.
+- Being incomplete: missing values.
+- Noise (data contaminated): may have errors.
+- Inconsistend: not corresponding to the attribute domain or contradictory
+
+# Statistical tools
+
+
+
+## References
+
+```{r}
+# Returns the names of all packages loaded in the current R session
+knitr::write_bib(.packages(), "references.bib")
+```
+
+<div id="refs"></div>
