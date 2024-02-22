@@ -1,23 +1,27 @@
 ---
-title: "Project 1: Statistical Tools"
-subtitle: "MS in Statistics for Data Science"
+title: 'Project 1: Statistical Tools'
 author: "Gabriela Levenfeld Sabau"
 date: "`r Sys.Date()`"
 output:
-  pdf_document:
-    latex_engine: xelatex
-    toc: yes
-    toc_depth: 6
-    keep_tex: yes
+  html_document:
+    toc: true
+    toc_depth: '6'
+    df_print: paged
   geometry: left=3cm,right=3cm,top=2cm,bottom=2cm
   mathjax: local
-  self_contained: no
+  self_contained: false
   word_document:
-    toc: yes
+    toc: true
     toc_depth: '6'
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+    toc_depth: 6
+    keep_tex: true
+subtitle: MS in Statistics for Data Science
 bibliography: references.bib
 nocite: '@*'
-link-citations: yes
+link-citations: true
 linkcolor: blue
 ---
 
@@ -94,7 +98,7 @@ The information contained in this dataset can be group into different areas.
 
 ## Goal
 
-Prediction over the `Churn` variable. Binary clasiffication problem, where we want to predict is a client is going to continue with the services provided by the company. Or if he is going to leave.
+Prediction over the `Churn` variable. Binary classification problem, where we want to predict is a client is going to continue with the services provided by the company. Or if he is going to leave.
 
 \pagebreak
 # Data preprocessing
@@ -102,20 +106,25 @@ Prediction over the `Churn` variable. Binary clasiffication problem, where we wa
 In this first section, we must prepare the dataset in order to use it for the computational model. This means handling missing data, deleting unnecessary information, encoding categorical variables and splitting the data, among other.
 
 
-## 1. Load data.
+## 1. Load material.
+
+**Load libraries**. Several libraries are need for the project in order to work properly.
 
 ```{r load_libraries, message=FALSE, warning=FALSE}
-# Libraries needed for the project in order to work properly
 library(skimr)
 library(caret) # For split the dataset
 library(tidyverse) # For glimpse
+library(dplyr) # mutate function
 ```
+
+**Load dataset**.
 
 ```{r load_data}
 # Load the dataset for this project
 data <- read.csv("Telco-Customer-Churn.csv", header = TRUE, sep = ",")
 ```
 
+**First look at the dataset**.
 
 ```{r small_EDA}
 # Small Exploratory Data Analysis
@@ -128,24 +137,112 @@ glimpse(data)
 head(data, 2)
 ```
 
-## 2. Deleting unnecessary information.
+## 2. Delete unnecessary information.
 
-Thanks to the above function, we realized we can remove the ID column (`customerID`), because it will not be useful for making predictions. On the other hand `PaperlessBilling` is also removed, I think it does not have too much sense.
+Thanks to the above function, we realized we can remove the ID column (`customerID`) because it will not be useful for making predictions. On the other hand, `PaperlessBilling` is also removed, due to nowadays we live in a digital era thus most people choose electronic payments and it will not really provide any additional information to the problem we are dealing with.
 
 ```{r rmv_columns}
 # Remove ID column 
-data <- data %>% select(-c(customerID,PaperlessBilling))
+data <- data %>% select(-c(customerID, PaperlessBilling))
 ```
 
-## 3. Encoding qualitative variables.
+## 3. Data manipulation.
 
-Encoding qualitative variables as well as rearrange them.
-These variables have been organized to facilitate working with them. The multi-state categorical variables ($3$: `MultipleLines`, `InternetService`, `Contract`,  `PaymentMethod`) precede the binary variables ($13$: `gender`, `SeniorCitizen`, `Partner`, `Dependents`, `PhoneService`, `OnlineSecurity`, `OnlineBackup`, `DeviceProtection`, `TechSupport`, `StreamingTV`, `StreamingMovies`, `Churn`), followed by the quantitative variables ($3$: `tenure`, `MonthlyCharges`, `TotalCharges`). Last variable is the target.
+By analyzing the dataset we can realized that there exists some variables that are quite intertwine.
 
-```{r}
+\underline{Combine `PhoneService` and `MultipleLines`}. The first variable indicates if the client has sign up for home phone service or not. Only when the client has hired for this service, he can choose between having $1$ phone line (`MultipleLines`=No) or have more than $1$ (`MultipleLines`=Yes). This relationship lead us into three possible scenarios:
+
+1. `PhoneService`=No and `MultipleLines`="No phone service". Customers who do not have phone service.
+
+2. `PhoneService`=Yes and `MultipleLines`=No. Customers who have phone service and choose to have a single line.
+
+3. `PhoneService`=Yes and `MultipleLines`=Yes. Customers who have phone service and choose to have multiple lines.
+
+Since `MultipleLines` can be consider to have all the information needed, I will combine this two variables on a new parameter named `PhoneServiceType` and treat it as a multi-state category with three options:
+
+- $0$: if there is no phone service.
+
+- $1$: if there is phone service with a single line.
+
+- $2$: if there is phone service with multiple lines.
+
+\underline{`InternetService` and its associate variables}. Something similar happend on this situation. Clients who have no sign up for Internet service, they are no be able to sign up for extra-services associated with it such as `OnlineSecurity`, `StreamingTV`, among others. The dataset storage this information of extra-services with "Yes", "No" or "No internet service". It is clearly that we can reduce this multi-state variables issue into a binary class. So "No phone service" will be understand simply as the customer does not have this service on (setting the parameter value into "No").
+
+**Note**: For both situation, we check there was no mistake on the data. So it has been computationally verified that there is concordance between the relationships of these variables. Thus avoiding the existence of possible nonsence situations. 
+
+
+```{r data_manipulation}
+## Unique values of each variable ----------------------------------------------
+unique(data$SeniorCitizen) # It is already transform in 1's and 0's
+
+cat_vars <- sapply(data, is.character) # Select qualitative variables
+lapply(data[, cat_vars], unique) # Print unique values
+
+
+## PhoneService and MultipleLines ----------------------------------------------
+# Subset with clients where PhoneService is "No"
+subset_no_Phone <- data[data$PhoneService == "No", ]
+# Check MultipleLines is set to "No phone service"
+if (all(subset_no_Phone$MultipleLines == "No phone service")) {
+  cat("In the subset where PhoneService is 'No', 
+      MultipleLines is set to 'No phone service' only.\n")
+} else {
+  cat("In the subset where PhoneService is 'No', 
+      MultipleLines is not exclusively set to 'No phone service'.\n")
+}
+
+# Combine PhoneService and MultipleLines on a new variable (PhoneServiceType)
+data <- data %>%
+  mutate(PhoneServiceType = case_when(
+    MultipleLines == "No phone service" ~ 0,
+    MultipleLines == "No" ~ 1,
+    TRUE ~ 2
+  ))
+
+# Remove original variables
+data <- select(data, -PhoneService, -MultipleLines)
+
+
+## Consequences Internet service -----------------------------------------------
+# Subset with clients where InternetService is "No"
+subset_no_Internet <- data[data$InternetService == "No", ]
+
+vars_to_check <- c("OnlineSecurity", "OnlineBackup", "DeviceProtection",
+                   "TechSupport", "StreamingTV", "StreamingMovies")
+
+# Check its associate variables are set to "No internet service"
+for (variable in vars_to_check) {
+  unique_values <- unique(subset_no_Internet[[variable]])
+  cat("Unique values for", variable, ":", unique_values)
+  cat("\n")
+}
+
+# Reduce the associate variables to a binary class ("No internet service" -> "No")
+for (variable in vars_to_check) {
+  data[[variable]] <- ifelse(data[[variable]] == "No internet service", "No", data[[variable]])
+}
+```
+
+## 4. Encoding qualitative variables.
+
+Next step is encoding qualitative variables as well as rearrange the dataset.
+These variables have been organized to facilitate working with them. The multi-state categorical variables ($4$: `InternetService`, `Contract`,  `PaymentMethod`, `PhoneServiceType`) precede the binary variables ($11$: `gender`, `SeniorCitizen`, `Partner`, `Dependents`, `OnlineSecurity`, `OnlineBackup`, `DeviceProtection`, `TechSupport`, `StreamingTV`, `StreamingMovies`, `Churn`), followed by the quantitative variables ($3$: `tenure`, `MonthlyCharges`, `TotalCharges`). Last variable is going to be the target (`Churn`).
+
+
+```{r, eval=FALSE}
+
+# TODO: Ordenar
+multi_vars <- c('InternetService', 'Contract', 'PaymentMethod')
+binary_vars <- c('gender', 'SeniorCitizen', 'Partner', 'Dependents', 'OnlineSecurity', 'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies', 'Churn', 'PhoneServiceType')
+numeric_vars <- c('tenure', 'MonthlyCharges', 'TotalCharges')
+
+# Missing values + Imputation
+# Scalar los datos numeric
+# TODO: as.factor y dummy
 # Convert binary variables to numeric (Yes/No to 1/0)
 binary_vars <- c("Partner", "Dependents", "PhoneService", "PaperlessBilling", "Churn")
 data[binary_vars] <- lapply(data[binary_vars], function(x) ifelse(x == "Yes", 1, 0))
+# Crear un nuevo csv (?)
 ```
 
 
@@ -182,7 +279,7 @@ table(X_test$Churn)/length(X_test$Churn)
 ```
 
 
-## Exploratory Data Analysis (EDA)
+# Exploratory Data Analysis (EDA)
 
 *Some ideas*
 REVIEW: some ideas to check for
@@ -203,9 +300,9 @@ The data can be:
 
 # References
 
-```{r}
+```{r eval=FALSE, echo=FALSE}
 # Returns the names of all packages loaded in the current R session
-knitr::write_bib(.packages(), "references.bib")
+# knitr::write_bib(.packages(), "references.bib")
 ```
 
 <div id="refs"></div>
