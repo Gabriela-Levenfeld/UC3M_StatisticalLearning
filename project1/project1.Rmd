@@ -112,9 +112,11 @@ In this first section, we must prepare the dataset in order to use it for the co
 
 ```{r load_libraries, message=FALSE, warning=FALSE}
 library(skimr)
-library(caret) # For split the dataset
 library(tidyverse) # For glimpse
 library(dplyr) # mutate function
+library(mice) # Imputation
+library(VIM) # Imputation graph
+library(caret) # For split the dataset
 ```
 
 **Load dataset**.
@@ -146,7 +148,7 @@ Thanks to the above function, we realized we can remove the ID column (`customer
 data <- data %>% select(-c(customerID, PaperlessBilling))
 ```
 
-## 3. Data manipulation.
+## 3. Data cleaning.
 
 By analyzing the dataset we can realized that there exists some variables that are quite intertwine.
 
@@ -223,7 +225,60 @@ for (variable in vars_to_check) {
 }
 ```
 
-## 4. Encoding qualitative variables.
+## 4. Handling missing data.
+
+On this dataset there are some missing values contained in the variable `TotalCharges` which we need to handle it first in order to be able to use the statistical tools after.
+
+Take in mind, these values represent only $0.1561834\%$ of customers in the dataset, the following approach could be followed:
+
+- **Delete this rows**; due to the low presence of missing values the data will not be affected.
+
+- **Set to $0$**; these observations correspond to new clients, therefore, not it has not passed enough time to compute this value.
+
+- **Imputation**; selected option thereby some techniques seen during lecture can be apply.
+
+For imputing the missing data the R library call `mice` is used. Instead of making a random prediction, `mice` by default makes $5$. However, in this exercise we will only choose the first of the five. Additionally, the method we will use will be 'pmm', which stands for predictive mean matching. That is, the data will be imputed taking the mean as a reference. Once we have generated the imputed data, we have to introduce it in our data. The easiest way to do this is with the `complete()` function, which complete the missing values with the values of the first imputation of the five that we just made.
+
+To check there is no missing data anymore, we use a graph from `library(VIM)` that represent the percentage of missing data.
+
+To check whether the imputed data adequately follows the distributions of the original data, we are going to use the `densityplot()` function, which shows us the marginal distribution of the observed data in blue; and in red, the $m=5$ densities for the predictor that has initially missing data which is `TotalCharges`. That is why, in the following graph, we observe $5$ functions in red, each corresponding to a repetition of the imputed data by `mice`.
+
+```{r handling_NAs, fig.width=4, fig.height=3, fig.align='center'}
+# Counting NA's ----------------------------------------------------------------
+missing_values <- colSums(is.na(data)) # 11 NA's in TotalCharges variable
+percentage_na <- missing_values/nrow(data)*100 # NA's in %
+sort(percentage_na, decreasing = TRUE)
+
+## MICE Imputation -------------------------------------------------------------
+meth <- rep("", ncol(data)) # Set all methods to "" (no imputation)
+names(meth)[names(meth) == "TotalCharges"] <- "pmm" # Specify TotalCharges method
+
+mice_model <- mice(data,
+  m = 5, maxit = 5, method = "pmm",
+  seed = 1234, print = FALSE
+)
+data <- complete(mice_model, 1) # Complete the data with the first imputation
+
+# Represent the % of missing data
+aggr(data,
+  col = c("navyblue", "yellow"), numbers = TRUE, sortVars = FALSE,
+  labels = names(data), cex.axis = .7, gap = 3,
+  ylab = c("Missing data", "Real data")
+)
+
+# Check it follows the distribution of the original variable
+densityplot(mice_model, scales = list(x = list(relation = "free")))
+```
+
+Due to it does not fit properly, as we can see on the density plot, I believe setting this observation to $0$ is the best option, among all.
+
+```{r}
+# TODO: Sacar los índices de las filas que tienen NA's
+# TODO: Establecer estas filas a cero.
+```
+
+
+## 5. Encoding qualitative variables.
 
 Next step is encoding qualitative variables as well as rearrange the dataset.
 These variables have been organized to facilitate working with them. The multi-state categorical variables ($4$: `InternetService`, `Contract`,  `PaymentMethod`, `PhoneServiceType`) precede the binary variables ($11$: `gender`, `SeniorCitizen`, `Partner`, `Dependents`, `OnlineSecurity`, `OnlineBackup`, `DeviceProtection`, `TechSupport`, `StreamingTV`, `StreamingMovies`, `Churn`), followed by the quantitative variables ($3$: `tenure`, `MonthlyCharges`, `TotalCharges`). Last variable is going to be the target (`Churn`).
@@ -236,7 +291,6 @@ multi_vars <- c('InternetService', 'Contract', 'PaymentMethod')
 binary_vars <- c('gender', 'SeniorCitizen', 'Partner', 'Dependents', 'OnlineSecurity', 'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies', 'Churn', 'PhoneServiceType')
 numeric_vars <- c('tenure', 'MonthlyCharges', 'TotalCharges')
 
-# Missing values + Imputation
 # Scalar los datos numeric
 # TODO: as.factor y dummy
 # Convert binary variables to numeric (Yes/No to 1/0)
@@ -245,22 +299,14 @@ data[binary_vars] <- lapply(data[binary_vars], function(x) ifelse(x == "Yes", 1,
 # Crear un nuevo csv (?)
 ```
 
-
-
-## Handling missing data    .
-
-```{r}
-# Counting NA
-colSums(is.na(data)) # 11 NA's in TotalCharges
-
-colSums(is.na(data))/nrow(data)
-percentage_na <- colSums(is.na(data))/nrow(data)*100 # In %
-sort(percentage_na, decreasing = TRUE)
-```
+## 5. Standarization
+## 6. Check unbalance target
 
 ```{r}
 table(data$Churn)
 ```
+
+## 7. Split the dataset
 
 ```{r}
 # Split into training and testing set
