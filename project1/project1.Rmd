@@ -116,6 +116,7 @@ library(tidyverse) # For glimpse
 library(dplyr) # mutate function
 library(mice) # Imputation
 library(VIM) # Imputation graph
+library(fastDummies) # For encoding multi-state variables
 library(caret) # For split the dataset
 ```
 
@@ -249,6 +250,11 @@ missing_values <- colSums(is.na(data)) # 11 NA's in TotalCharges variable
 percentage_na <- missing_values/nrow(data)*100 # NA's in %
 sort(percentage_na, decreasing = TRUE)
 
+# Get the index of the rows where TotalCharges=NA
+index_TotalCharges_na <- which(is.na(data$TotalCharges))
+print(index_TotalCharges_na)
+
+
 ## MICE Imputation -------------------------------------------------------------
 meth <- rep("", ncol(data)) # Set all methods to "" (no imputation)
 names(meth)[names(meth) == "TotalCharges"] <- "pmm" # Specify TotalCharges method
@@ -273,42 +279,78 @@ densityplot(mice_model, scales = list(x = list(relation = "free")))
 Due to it does not fit properly, as we can see on the density plot, I believe setting this observation to $0$ is the best option, among all.
 
 ```{r}
-# TODO: Sacar los índices de las filas que tienen NA's
-# TODO: Establecer estas filas a cero.
+# TODO: Establecer estas filas a cero (?) o dejo la imputation.
+print(data[489,]) # User with TotalCharges=NA, after imputation
+print(data[490,]) # Normal user
 ```
 
 
-## 5. Encoding qualitative variables.
+## 5. Encoding categorical variables.
 
-Next step is encoding qualitative variables as well as rearrange the dataset.
-These variables have been organized to facilitate working with them. The multi-state categorical variables ($4$: `InternetService`, `Contract`,  `PaymentMethod`, `PhoneServiceType`) precede the binary variables ($11$: `gender`, `SeniorCitizen`, `Partner`, `Dependents`, `OnlineSecurity`, `OnlineBackup`, `DeviceProtection`, `TechSupport`, `StreamingTV`, `StreamingMovies`, `Churn`), followed by the quantitative variables ($3$: `tenure`, `MonthlyCharges`, `TotalCharges`). Last variable is going to be the target (`Churn`).
+**Categorical variables**.
 
+- Binary variables. $11$: `gender`, `SeniorCitizen`, `Partner`, `Dependents`, `OnlineSecurity`, `OnlineBackup`, `DeviceProtection`, `TechSupport`, `StreamingTV`, `StreamingMovies` and `Churn`.
 
-```{r, eval=FALSE}
+For these variables, I will establish "No" values as $0$ and "Yes" as $1$'s.
 
-# TODO: Ordenar
-multi_vars <- c('InternetService', 'Contract', 'PaymentMethod')
-binary_vars <- c('gender', 'SeniorCitizen', 'Partner', 'Dependents', 'OnlineSecurity', 'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies', 'Churn', 'PhoneServiceType')
-numeric_vars <- c('tenure', 'MonthlyCharges', 'TotalCharges')
+- Multi-sate variables. $4$: `InternetService`, `Contract`,  `PaymentMethod`, `PhoneServiceType`.
 
-# Scalar los datos numeric
-# TODO: as.factor y dummy
-# Convert binary variables to numeric (Yes/No to 1/0)
-binary_vars <- c("Partner", "Dependents", "PhoneService", "PaperlessBilling", "Churn")
-data[binary_vars] <- lapply(data[binary_vars], function(x) ifelse(x == "Yes", 1, 0))
-# Crear un nuevo csv (?)
-```
+On the other hand, to manage this section is a little bit more complicated and we need to be aware of the presence or absence of some natural order on it.
 
-## 5. Standarization
-## 6. Check unbalance target
+Strategy 1: Natural order.
+`PhoneServiceType` preserve a natural order. As a consequence this parameter, will be encode preserving the order. It is worth to mention that `PhoneServiceType` is already encode. And the idea explained above has been apply, values set as $0$, $1$ and $2$.
+
+Strategy 2: No order.
+For the second set of categorical parameter (`InternetService`, `Contract` and `PaymentMethod`). I will create dummy variables, known as one-hot encoding. This is because, for instance, on the `InternetService` parameter, "Fiber Optic" is not inherently greater than "DSL". Same happens with the rest of variables mention.
 
 ```{r}
+## Binary encoding -------------------------------------------------------------
+data$gender <- as.integer(data$gender == "Female") # Assuming Female:1, Male:0
+
+binary_variables <- c(
+  "Partner", "Dependents", "OnlineSecurity", "OnlineBackup",
+  "DeviceProtection", "TechSupport", "StreamingTV",
+  "StreamingMovies", "Churn"
+)
+# Assuming Yes:1, No:0
+data[binary_variables] <- lapply(data[binary_variables],
+                                 function(x) as.integer(x == "Yes"))
+
+
+## Multi-state variables -------------------------------------------------------
+# Dummy variables creation
+data <- dummy_cols(data, 
+                   select_columns = c("InternetService", "Contract", "PaymentMethod"),
+                   remove_selected_columns = TRUE,
+                   remove_first_dummy = TRUE)
+```
+
+
+# Exploratory Data Analysis (EDA)
+
+
+
+
+
+
+**Quantitative variables**.
+
+- $3$: `tenure`, `MonthlyCharges`, `TotalCharges`.
+
+```{r, eval=FALSE}
+numeric_variables <- c('tenure', 'MonthlyCharges', 'TotalCharges')
+
+# Scalar los datos numeric
+```
+## 6. Check unbalance target
+
+```{r eval=FALSE}
 table(data$Churn)
 ```
 
 ## 7. Split the dataset
 
-```{r}
+```{r eval=FALSE}
 # Split into training and testing set
 set.seed(1234) # For reproducibility
 index <- createDataPartition(data$Churn, p=0.8, list=FALSE)
@@ -325,16 +367,8 @@ table(X_test$Churn)/length(X_test$Churn)
 ```
 
 
-# Exploratory Data Analysis (EDA)
 
-*Some ideas*
-REVIEW: some ideas to check for
-Working with real data can be challenging-
-The data can be:
-- Be stored in different formats.
-- Being incomplete: missing values.
-- Noise (data contaminated): may have errors.
-- Inconsistend: not corresponding to the attribute domain or contradictory
+
 
 # Statistical tools
 ## LDA
