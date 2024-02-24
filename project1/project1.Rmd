@@ -118,6 +118,12 @@ library(mice) # Imputation
 library(VIM) # Imputation graph
 library(fastDummies) # For encoding multi-state variables
 library(caret) # For split the dataset
+library(ggplot2) # Plots
+library(GGally) # For plots of the continuous variables
+library(pander) # For making tables
+library(gridExtra) # For grid.arrange
+library(reshape2) # For melt function
+library(corrplot) # For correlation matrix
 ```
 
 **Load dataset**.
@@ -131,13 +137,13 @@ data <- read.csv("Telco-Customer-Churn.csv", header = TRUE, sep = ",")
 
 ```{r small_EDA}
 # Small Exploratory Data Analysis
-skim(data)
+#skim(data)
 # Presents results for every column; the statistics it provides depend on the class of the variable
 
 glimpse(data)
 
 # For visualize the first 2 rows
-head(data, 2)
+#head(data, 2)
 ```
 
 ## 2. Delete unnecessary information.
@@ -171,10 +177,10 @@ Since `MultipleLines` can be consider to have all the information needed, I will
 
 \underline{`InternetService` and its associate variables}. Something similar happend on this situation. Clients who have no sign up for Internet service, they are no be able to sign up for extra-services associated with it such as `OnlineSecurity`, `StreamingTV`, among others. The dataset storage this information of extra-services with "Yes", "No" or "No internet service". It is clearly that we can reduce this multi-state variables issue into a binary class. So "No phone service" will be understand simply as the customer does not have this service on (setting the parameter value into "No").
 
-**Note**: For both situation, we check there was no mistake on the data. So it has been computationally verified that there is concordance between the relationships of these variables. Thus avoiding the existence of possible nonsence situations. 
+**Note**: For both situation, we check there was no mistake on the data. So it has been computationally verified that there is concordance between the relationships of these variables. Thus avoiding the existence of possible nonsense situations.
 
 
-```{r data_manipulation}
+```{r data_cleaning, echo=TRUE, results='hide'}
 ## Unique values of each variable ----------------------------------------------
 unique(data$SeniorCitizen) # It is already transform in 1's and 0's
 
@@ -244,7 +250,7 @@ To check there is no missing data anymore, we use a graph from `library(VIM)` th
 
 To check whether the imputed data adequately follows the distributions of the original data, we are going to use the `densityplot()` function, which shows us the marginal distribution of the observed data in blue; and in red, the $m=5$ densities for the predictor that has initially missing data which is `TotalCharges`. That is why, in the following graph, we observe $5$ functions in red, each corresponding to a repetition of the imputed data by `mice`.
 
-```{r handling_NAs, fig.width=4, fig.height=3, fig.align='center'}
+```{r counting_NAs, echo=TRUE, results='hide'}
 # Counting NA's ----------------------------------------------------------------
 missing_values <- colSums(is.na(data)) # 11 NA's in TotalCharges variable
 percentage_na <- missing_values/nrow(data)*100 # NA's in %
@@ -253,8 +259,9 @@ sort(percentage_na, decreasing = TRUE)
 # Get the index of the rows where TotalCharges=NA
 index_TotalCharges_na <- which(is.na(data$TotalCharges))
 print(index_TotalCharges_na)
+```
 
-
+```{r handling_NAs, fig.width=4, fig.height=3, fig.align='center'}
 ## MICE Imputation -------------------------------------------------------------
 meth <- rep("", ncol(data)) # Set all methods to "" (no imputation)
 names(meth)[names(meth) == "TotalCharges"] <- "pmm" # Specify TotalCharges method
@@ -265,6 +272,7 @@ mice_model <- mice(data,
 )
 data <- complete(mice_model, 1) # Complete the data with the first imputation
 
+par(nfrow=c(1,2))
 # Represent the % of missing data
 aggr(data,
   col = c("navyblue", "yellow"), numbers = TRUE, sortVars = FALSE,
@@ -301,9 +309,9 @@ Strategy 1: Natural order.
 `PhoneServiceType` preserve a natural order. As a consequence this parameter, will be encode preserving the order. It is worth to mention that `PhoneServiceType` is already encode. And the idea explained above has been apply, values set as $0$, $1$ and $2$.
 
 Strategy 2: No order.
-For the second set of categorical parameter (`InternetService`, `Contract` and `PaymentMethod`). I will create dummy variables, known as one-hot encoding. This is because, for instance, on the `InternetService` parameter, "Fiber Optic" is not inherently greater than "DSL". Same happens with the rest of variables mention.
+For the second set of categorical parameter (`InternetService`, `Contract` and `PaymentMethod`). I will create factors variables. This is because, for instance, on the `InternetService` parameter, "Fiber Optic" is not inherently greater than "DSL". Same happens with the rest of variables mention.
 
-```{r}
+```{r encoding_categorical_vars, echo=TRUE, results='hide'}
 ## Binary encoding -------------------------------------------------------------
 data$gender <- as.integer(data$gender == "Female") # Assuming Female:1, Male:0
 
@@ -318,48 +326,251 @@ data[binary_variables] <- lapply(data[binary_variables],
 
 
 ## Multi-state variables -------------------------------------------------------
-# Dummy variables creation
-data <- dummy_cols(data, 
-                   select_columns = c("InternetService", "Contract", "PaymentMethod"),
-                   remove_selected_columns = TRUE,
-                   remove_first_dummy = TRUE)
+# Rename levels to avoid misunderstands later
+# InternetService to a factor and rename levels
+data$InternetService <- factor(data$InternetService,
+                               levels = c("DSL", "Fiber optic", "No"),
+                               labels = c("DSL", "FiberOptic", "No"))
+levels(data$InternetService) # Check the levels
+
+
+# Contract to a factor and rename levels
+data$Contract <- factor(data$Contract,
+                        levels = c("Month-to-month", "One year", "Two year"),
+                        labels = c("MonthToMonth", "OneYear", "TwoYear"))
+levels(data$Contract) # Check the levels
+
+
+# PaymentMethod to a factor and rename levels
+data$PaymentMethod <- factor(data$PaymentMethod,
+                             levels = c("Electronic check", 
+                                        "Mailed check", 
+                                        "Bank transfer (automatic)",
+                                        "Credit card (automatic)"),
+                             labels = c("ElectronicCheck",
+                                        "MailedCheck", 
+                                        "BankTransfer",
+                                        "CreditCard")
+                             )
+levels(data$PaymentMethod) # Check the levels
+```
+
+## 6. Split the dataset
+
+```{r split_dataset, echo=TRUE, results='hide'}
+set.seed(1234) # For reproducibility
+
+# Split into training (80%) and testing (20%) set
+index <- createDataPartition(data$Churn, p=0.8, list=FALSE)
+training <- data[ index,]
+testing <- data[-index,]
+
+nrow(training)
+nrow(testing)
 ```
 
 
 # Exploratory Data Analysis (EDA)
 
+## Numeric variables.
+
+`ggpair` function allow us to create a scatter plot matrix for this three variables. For the visualization of this parameters, I decide to plot histograms.
+
+This matrix provides a visual representation, featuring histogram plots for each variable along the diagonal and showcasing pairwise relationships between variables in the lower triangular section. It also show on the top triangular the correlation coefficients for each pair of variables. 
+The idea is to identify the shape distribution, tendencies, outliers, among other things, thanks to different views in one grid.
 
 
+```{r scatterPlot_contiuous}
+# Select continuous variables
+continuous_data <- training[, c("tenure", "MonthlyCharges", "TotalCharges", "Churn")]
 
-
-
-**Quantitative variables**.
-
-- $3$: `tenure`, `MonthlyCharges`, `TotalCharges`.
-
-```{r, eval=FALSE}
-numeric_variables <- c('tenure', 'MonthlyCharges', 'TotalCharges')
-
-# Scalar los datos numeric
+# Create matrix of plots
+ggpairs(continuous_data,
+        aes(fill="pink"),
+        lower = list(continuous = "points", combo = "box_no_facet"),
+        upper = list(continuous = "cor"),
+        diag = list(continuous = "barDiag"),
+        title = "Scatter plot matrix"
+       )
 ```
-## 6. Check unbalance target
 
-```{r eval=FALSE}
+- **Tenure**
+
+The histogram shows a bimodal distribution, with peaks at the extremes of the range. This implies that most of the customers are either new (low peak) or very loyal (high peak), with fewer clients in the mid-range.
+
+- **MonthlyCharges**
+
+It can be observe a big peak at the begging of the distribution which represent a big amount of clients that pays around 25\$ per month on this company. On the other hand, there are more less a uniform number of customers that pays from 60\$ to 120\$. 
+
+- **TotalCharges**
+
+It follows a right skewness distribution, which means most of the people are subscribe to services that require to pay less amount of money. It is clear, that clients are willing to pay around $1250 \$$.
+
+If we deeper explore this variable related with the output, we get to the conclusion that clients who have not spent much are more likely to churn (`Churn`=$1$). On the other hand, clients that spend more amount of money, tends to stay more time with this company (`Churn`=$0$).
+
+```{r totalCharges_plot}
+ggplot(training, aes(x = TotalCharges, fill = factor(Churn))) +
+  geom_density(alpha = 0.5) + # Overlay density plots, alpha: transparency
+  scale_fill_manual(values = c("#FFD39B", "lightblue1")) +
+  labs(x = "Total Charges", y = "Density", fill = "Churn") +
+  theme_minimal() + # Theme
+  ggtitle("Density plot of TotalCharges by Churn status")
+```
+
+
+**General insights**. The scatter plot matrix shown that none of the numeric variables follow a normal distribution. Due to the used of some methods, the data will be standardized. In addition, it is worth mentioning the high correlation presented between the variables, which are the ones that are above $0.7$: `tenure`-`TotalCharges` with a coefficient of $0.823$.
+
+```{r numeric_transf}
+# Numeric transformation
+# TRAINING dataset -------------------------------------------------------------
+training_transf <- training
+# Standardizing the variables
+training_transf[c("tenure", "MonthlyCharges", "TotalCharges")] <- scale(training_transf[c("tenure", "MonthlyCharges", "TotalCharges")])
+
+# TESTING dataset --------------------------------------------------------------
+testing_transf <- testing
+# Standardizing the variables
+testing_transf[c("tenure", "MonthlyCharges", "TotalCharges")] <- scale(testing_transf[c("tenure", "MonthlyCharges", "TotalCharges")])
+```
+
+
+## Cualitative variables.
+
+**Binary variables**.
+
+In a first general overview thanks to the table, we can see that `gender` as well as `Partner` are data equally represented on the dataset (almost $50\%$). Meanwhile, just around the $16\%$ of the people is a senior citizen, which makes sense and probably will be according to the real representation in a country.
+
+```{r}
+# For binary variables
+binary_variables <- c("gender", "SeniorCitizen", "Partner", "Dependents", 
+                      "OnlineSecurity", "OnlineBackup", "DeviceProtection", 
+                      "TechSupport", "StreamingTV", "StreamingMovies")
+
+# Information about data storage on training set -------------------------------
+mean_binary_values <- sapply(training[binary_variables], mean)
+mean_binary_table <- data.frame(Mean = mean_binary_values)
+pander(mean_binary_table)
+```
+
+The following plots, shows the distribution of churn by each binary variable.
+
+It can clearly, be observed that the lost of clients is very similar independently of the `gender` of the client and if the customer has a partner or not.
+Something similar happens with the remain variables. It is not a clear pattern.
+
+```{r}
+# Plots Churn by variable ------------------------------------------------------
+plot_churn_distribution <- function(data, variable) {
+  plot_data <- data.frame(table(data[[variable]], data$Churn))
+  
+  ggplot(plot_data, aes(x = Var1, y = Freq, fill = factor(Var2))) +
+    geom_bar(stat = "identity") +
+    labs(title = paste("Churn distribution by", variable),
+         x = variable, y = "Count", fill = "Churn") +
+    theme_minimal()
+}
+
+plot_list <- list()
+for (variable in binary_variables) {
+  plot <- plot_churn_distribution(training, variable)
+  plot_list[[variable]] <- plot
+}
+grid.arrange(grobs = plot_list, ncol = 3) # Grid 4x3
+```
+
+**Category variables**.
+
+Recall there are $4$ variables: `InternetService`, `Contract`,  `PaymentMethod`, `PhoneServiceType`. With the following plot we can observed how categories are distribute on a variable. Distribution of `PhoneServiceType` and `InternetService`, lead us into the conclusion that most of the clients choose having phone/internet service above not having. On the other hand, `PaymentMethod` are more less equally distributed hence customer might not have a prefer way to pay. Finally, it looks like clients favorite contract type is to revenue it month by month.
+
+```{r}
+# InternetService
+plot_internetService <- ggplot(training, aes(x = InternetService)) +
+  geom_bar(fill = "cornflowerblue") +
+  labs(title = "Distribution of Internet Service Types",
+       x = "Internet Service",
+       y = "Count") +
+  theme_minimal()
+
+# Contract
+plot_contract <- ggplot(training, aes(x = Contract)) + 
+  geom_bar(fill = "coral") +
+  labs(title = "Distribution of Contract Types",
+       x = "Contract Type", 
+       y = "Count") +
+  theme_minimal()
+
+# PaymentMethod
+plot_paymentMethod <- ggplot(training, aes(x = PaymentMethod)) + 
+  geom_bar(fill = "palegreen") +
+  labs(title = "Distribution of Payment Methods", 
+       x = "Payment Method",
+       y = "Count") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# PhoneServiceType
+plot_phoneServiceType <- ggplot(training, aes(x = as.factor(PhoneServiceType))) +
+  geom_bar(fill = "orchid") +
+  labs(title = "Distribution of Phone Service Types", 
+       x = "Phone Service Type", 
+       y = "Count") +
+  theme_minimal()
+
+# Arrange plots in a grid
+grid.arrange(plot_internetService, plot_contract, plot_paymentMethod, plot_phoneServiceType, ncol = 2)
+```
+
+Finally, if we study the relationship of these variables with the target we realized that people who design to revenue its contract each $2$ years, are loyal clients (which almost never change to another company). Another insight is that people that pay by electronic check tends to abandon the company more than with other payments.
+
+```{r}
+# Melt the training data to long format for faceting
+category_data <- melt(training, id.vars = "Churn", measure.vars = c("InternetService", "Contract", "PaymentMethod", "PhoneServiceType"))
+
+category_data$Churn <- as.factor(category_data$Churn)
+
+# Create the combined plot using the melted data
+ggplot(category_data, aes(x = value, fill = Churn)) + 
+  geom_bar(position = "fill") +
+  scale_fill_manual(values = c("0" = "darkolivegreen3", "1" = "brown3")) +
+  labs(title = "Relationship with Churn",
+       x = "", y = "Proportion") +
+  facet_wrap(~variable, scales = "free_x", nrow = 2) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        strip.background = element_blank(),
+        strip.text.x = element_text(size = 10))
+```
+
+
+## Correlation matrix
+
+```{r}
+# Corr not works for factors:
+# 'InternetService', 'Contract', 'PaymentMethod' are not numeric and were ignored
+ggcorr(training[,-1], label = T)
+
+# TODO: Arreglar el plot
+# TODO: Add some conclusion about variables more influential
+```
+
+
+This matrix give us the strength and direction of relationship between the variables of my dataset. In where, larger values (does not matter if positive or negative) suggest a stronger relationships.
+
+If the coefficient is positive, then this means that if one of the evaluated variables increases (or decreases) the other will also do so. While if the coefficient is negative; While one variable increases, the other decreases.
+
+Next step, consist on getting the determinant and trace of the covariance matrix in order to compare the results of the variables before and after applying the proper transformation.
+
+
+## Target variable
+
+```{r}
 table(data$Churn)
+
+# TODO: Hay unbalane (?)
 ```
 
-## 7. Split the dataset
+We can see that the dataset is imbalanced. There are more people information about Churn=No. This is something, we will must solve.
 
 ```{r eval=FALSE}
-# Split into training and testing set
-set.seed(1234) # For reproducibility
-index <- createDataPartition(data$Churn, p=0.8, list=FALSE)
-
-X_train <- data[index,]
-X_test <- data[-index,]
-y_train <- data[index,]$Churn
-y_test <- data[-index,]$Churn
-
 # In order to check proportion are still the same
 table(data$Churn)/length(data$Churn)
 table(X_train$Churn)/length(X_train$Churn)
@@ -367,10 +578,18 @@ table(X_test$Churn)/length(X_test$Churn)
 ```
 
 
-
-
-
 # Statistical tools
+
+```{r}
+# Divide into predictors and target both subsets
+X_train <- training_transf[index,]
+y_train <- data[index,]$Churn
+
+X_test <- data[-index,]
+y_test <- data[-index,]$Churn
+```
+
+
 ## LDA
 ## QDA
 ## Más modelos
