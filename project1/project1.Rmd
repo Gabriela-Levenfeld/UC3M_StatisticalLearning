@@ -124,6 +124,7 @@ library(pander) # For making tables
 library(gridExtra) # For grid.arrange
 library(reshape2) # For melt function
 library(corrplot) # For correlation matrix
+library(MASS) # For qda and lda
 ```
 
 **Load dataset**.
@@ -582,17 +583,79 @@ table(X_test$Churn)/length(X_test$Churn)
 
 ```{r}
 # Divide into predictors and target both subsets
-X_train <- training_transf[index,]
-y_train <- data[index,]$Churn
+X_train <- training_transf
+y_train <- training_transf$Churn
 
-X_test <- data[-index,]
-y_test <- data[-index,]$Churn
+X_test <- testing_transf
+y_test <- testing_transf$Churn
+```
+
+## Bayes classifiers
+### LDA
+
+
+### QDA
+
+
+```{r}
+model_QDA <- qda(Churn~., data=X_train)
+model_QDA
 ```
 
 
-## LDA
-## QDA
-## Más modelos
+
+
+**IDEAS DE CLASE**
+```{r}
+qda.class.Iris <- qda(Species ~ ., iris)
+qda.class.Iris
+# We use the 4 variables
+
+# Predictions
+post.prob.qda = predict(qda.class.Iris, iris)$posterior
+head(post.prob.qda)
+
+
+# QDA into labels
+pred.qda = predict(qda.class.Iris, iris)$class
+head(pred.qda)
+```
+
+Scatterplot with predictions: good classifications in red and bad classifications in black
+
+QDA:
+
+```{r}
+colors.qda.iris.good.bad <- c("black","red")[1*(iris[,5]==pred.qda)+1]
+pairs(iris[,1:4],main="Bad (in black) classifications for Iris flowers with QDA",pch=19,col=colors.qda.iris.good.bad,lower.panel=NULL)
+```
+
+Performance measures
+
+Summarize accuracy (confusion matrix)
+
+```{r}
+ConfMat.qda = table(pred.qda, iris$Species)
+ConfMat.qda
+```
+
+```{r}
+n <- dim(iris)[1]
+error.qda <- (n - sum(diag(ConfMat.qda)))/n
+error.qda # 2%
+```
+
+Exploratory graph for QDA:
+
+```{r}
+library(klaR)
+partimat(Species ~ ., data=iris, method="qda")
+```
+
+### Naïve Bayes
+### Shrinkage classification
+
+## Logistic regression
 
 
 # Conclusion
