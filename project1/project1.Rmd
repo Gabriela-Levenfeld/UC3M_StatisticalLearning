@@ -153,7 +153,7 @@ Thanks to the above function, we realized we can remove the ID column (`customer
 
 ```{r rmv_columns}
 # Remove ID column 
-data <- data %>% select(-c(customerID, PaperlessBilling))
+data <- data %>% dplyr::select(-c(customerID, PaperlessBilling))
 ```
 
 ## 3. Data cleaning.
@@ -210,7 +210,7 @@ data <- data %>%
   ))
 
 # Remove original variables
-data <- select(data, -PhoneService, -MultipleLines)
+data <- dplyr::select(data, -PhoneService, -MultipleLines)
 
 
 ## Consequences Internet service -----------------------------------------------
@@ -316,10 +316,12 @@ For the second set of categorical parameter (`InternetService`, `Contract` and `
 ## Binary encoding -------------------------------------------------------------
 data$gender <- as.integer(data$gender == "Female") # Assuming Female:1, Male:0
 
+data$Churn <- factor(data$Churn)
+levels(data$Churn) # Check the levels
+
 binary_variables <- c(
   "Partner", "Dependents", "OnlineSecurity", "OnlineBackup",
-  "DeviceProtection", "TechSupport", "StreamingTV",
-  "StreamingMovies", "Churn"
+  "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies"
 )
 # Assuming Yes:1, No:0
 data[binary_variables] <- lapply(data[binary_variables],
@@ -441,7 +443,7 @@ testing_transf[c("tenure", "MonthlyCharges", "TotalCharges")] <- scale(testing_t
 
 In a first general overview thanks to the table, we can see that `gender` as well as `Partner` are data equally represented on the dataset (almost $50\%$). Meanwhile, just around the $16\%$ of the people is a senior citizen, which makes sense and probably will be according to the real representation in a country.
 
-```{r}
+```{r eda_binary_table}
 # For binary variables
 binary_variables <- c("gender", "SeniorCitizen", "Partner", "Dependents", 
                       "OnlineSecurity", "OnlineBackup", "DeviceProtection", 
@@ -458,7 +460,7 @@ The following plots, shows the distribution of churn by each binary variable.
 It can clearly, be observed that the lost of clients is very similar independently of the `gender` of the client and if the customer has a partner or not.
 Something similar happens with the remain variables. It is not a clear pattern.
 
-```{r}
+```{r eda_binary_plot}
 # Plots Churn by variable ------------------------------------------------------
 plot_churn_distribution <- function(data, variable) {
   plot_data <- data.frame(table(data[[variable]], data$Churn))
@@ -470,19 +472,22 @@ plot_churn_distribution <- function(data, variable) {
     theme_minimal()
 }
 
-plot_list <- list()
-for (variable in binary_variables) {
-  plot <- plot_churn_distribution(training, variable)
-  plot_list[[variable]] <- plot
-}
-grid.arrange(grobs = plot_list, ncol = 3) # Grid 4x3
+
+plot_list <- lapply(binary_variables, function(variable) {
+  plot_churn_distribution(training, variable)
+})
+
+library(patchwork)
+combined_plots <- wrap_plots(plot_list, ncol = 3)
+combined_plots
+#grid.arrange(grobs = plot_list, ncol = 3) # Grid 4x3
 ```
 
 **Category variables**.
 
 Recall there are $4$ variables: `InternetService`, `Contract`,  `PaymentMethod`, `PhoneServiceType`. With the following plot we can observed how categories are distribute on a variable. Distribution of `PhoneServiceType` and `InternetService`, lead us into the conclusion that most of the clients choose having phone/internet service above not having. On the other hand, `PaymentMethod` are more less equally distributed hence customer might not have a prefer way to pay. Finally, it looks like clients favorite contract type is to revenue it month by month.
 
-```{r}
+```{r eda_category_distribution}
 # InternetService
 plot_internetService <- ggplot(training, aes(x = InternetService)) +
   geom_bar(fill = "cornflowerblue") +
@@ -522,16 +527,14 @@ grid.arrange(plot_internetService, plot_contract, plot_paymentMethod, plot_phone
 
 Finally, if we study the relationship of these variables with the target we realized that people who design to revenue its contract each $2$ years, are loyal clients (which almost never change to another company). Another insight is that people that pay by electronic check tends to abandon the company more than with other payments.
 
-```{r}
+```{r eda_category_byChurn}
 # Melt the training data to long format for faceting
 category_data <- melt(training, id.vars = "Churn", measure.vars = c("InternetService", "Contract", "PaymentMethod", "PhoneServiceType"))
-
-category_data$Churn <- as.factor(category_data$Churn)
 
 # Create the combined plot using the melted data
 ggplot(category_data, aes(x = value, fill = Churn)) + 
   geom_bar(position = "fill") +
-  scale_fill_manual(values = c("0" = "darkolivegreen3", "1" = "brown3")) +
+  scale_fill_manual(values = c("No" = "darkolivegreen3", "Yes" = "brown3")) +
   labs(title = "Relationship with Churn",
        x = "", y = "Proportion") +
   facet_wrap(~variable, scales = "free_x", nrow = 2) +
@@ -544,7 +547,7 @@ ggplot(category_data, aes(x = value, fill = Churn)) +
 
 ## Correlation matrix
 
-```{r}
+```{r correlation_matrix}
 # Corr not works for factors:
 # 'InternetService', 'Contract', 'PaymentMethod' are not numeric and were ignored
 ggcorr(training[,-1], label = T)
@@ -566,7 +569,7 @@ Next step, consist on getting the determinant and trace of the covariance matrix
 ```{r}
 table(data$Churn)
 
-# TODO: Hay unbalane (?)
+# TODO: Unbalance between the 2 classes (?)
 ```
 
 We can see that the dataset is imbalanced. There are more people information about Churn=No. This is something, we will must solve.
@@ -581,85 +584,110 @@ table(X_test$Churn)/length(X_test$Churn)
 
 # Statistical tools
 
+This second section aim is to evaluate the performance of different classification models for the binary classification task we are deal with. For each of these techniques, we will also compute the confusion matrix, a tool which will indicate us how many instances were correctly classified and how many were misclassified.
+The task attempts to estimate whether or not a customer intends to stop using a company's services based on sevaral variables such as gender, monthly charges, and payment method, among others.
+
 ```{r}
 # Divide into predictors and target both subsets
 X_train <- training_transf
-y_train <- training_transf$Churn
+y_train <- training_transf %>% dplyr::select(Churn)
 
 X_test <- testing_transf
-y_test <- testing_transf$Churn
+y_test <- testing_transf %>% dplyr::select(Churn)
 ```
 
 ## Bayes classifiers
-### LDA
-
 
 ### QDA
 
-
 ```{r}
-model_QDA <- qda(Churn~., data=X_train)
+model_QDA <- qda(Churn~., data=training_transf)
 model_QDA
 ```
 
-
-
-
-**IDEAS DE CLASE**
-```{r}
-qda.class.Iris <- qda(Species ~ ., iris)
-qda.class.Iris
-# We use the 4 variables
-
-# Predictions
-post.prob.qda = predict(qda.class.Iris, iris)$posterior
-head(post.prob.qda)
-
-
-# QDA into labels
-pred.qda = predict(qda.class.Iris, iris)$class
-head(pred.qda)
+```{r eval=FALSE}
+# TODO: Not working
+# Exploratory graph for QDA
+library(klaR)
+partimat(Churn ~ ., data=training_transf, method="qda")
 ```
 
-Scatterplot with predictions: good classifications in red and bad classifications in black
+```{r}
+# Predictions
+post_prob_qda = predict(model_QDA, training_transf)$posterior
+head(post_prob_qda)
+
+# QDA into labels
+predictions_QDA = predict(model_QDA, training_transf)$class
+head(predictions_QDA)
+```
+
+**Scatterplot with predictions**: good classifications in red and bad classifications in black
 
 QDA:
 
 ```{r}
-colors.qda.iris.good.bad <- c("black","red")[1*(iris[,5]==pred.qda)+1]
-pairs(iris[,1:4],main="Bad (in black) classifications for Iris flowers with QDA",pch=19,col=colors.qda.iris.good.bad,lower.panel=NULL)
+colors_qda_good_bad <- c("black","red")[1*(training_transf[,5]==predictions_QDA)+1]
+pairs(training_transf[,1:4], 
+      main="Bad (in black) classifications with QDA",
+      pch=19, 
+      col=colors_qda_good_bad, 
+      lower.panel=NULL)
 ```
 
-Performance measures
+
+**Performance measures**
 
 Summarize accuracy (confusion matrix)
 
 ```{r}
-ConfMat.qda = table(pred.qda, iris$Species)
-ConfMat.qda
+confMat_QDA = table(predictions_QDA, training_transf$Churn)
+confMat_QDA
 ```
 
 ```{r}
-n <- dim(iris)[1]
-error.qda <- (n - sum(diag(ConfMat.qda)))/n
-error.qda # 2%
+n <- dim(training_transf)[1]
+error_QDA <- (n - sum(diag(confMat_QDA)))/n
+error_QDA
+# 24.21%, sin previo balanceo de clases
 ```
 
-Exploratory graph for QDA:
+### LDA
 
 ```{r}
-library(klaR)
-partimat(Species ~ ., data=iris, method="qda")
+model_LDA <- lda(Churn~., data=training_transf)
+model_LDA
+
+# TODO: (Not working) Exploratory Graph for LDA
+#partimat(Churn~., data=training_transf, methis='lda')
+
+# Postior probabilities
+post_prob_LDA = predict(model_LDA, training_transf)$posterior
+head(post_prob_LDA)
+
+# LDA into labels 
+predictions_LDA =predict(model_LDA, training_transf)$class 
+head(predictions_LDA)
+
+# Scatterplot with predictions: good->red and bad->black
+colors_lda_goodbad <- c("black","red")[1*(training_transf[,5]==predictions_LDA)+1]
+pairs(training_transf[,1:4],
+      main="Bad (in black) classifications for LDA",
+      pch=19,
+      col=colors_lda_goodbad,
+      lower.panel=NULL)
+
+# Performance measures
+confMat_LDA=table(predictions_LDA, training_transf$Churn)
+confMat_LDA
+error_LDA=(n-sum(diag(confMat_LDA)))/n
+error_LDA #20.44%
 ```
 
 ### Naïve Bayes
 ### Shrinkage classification
-
 ## Logistic regression
-
-
 # Conclusion
-
 # References
 
 ```{r eval=FALSE, echo=FALSE}
