@@ -696,6 +696,7 @@ error_LDA
 
 ```{r}
 # Train Naïve Bayes model -> laplace controls smoothing of probabilities
+#model_NB <- naiveBayes(X_train, y_train, laplace = 1)
 model_NB <- naiveBayes(X_train, y_train, laplace = 1)
 model_NB
 
@@ -716,17 +717,17 @@ error_NB
 library(e1071)
 
 # Set up train control -> 5 repeats of 10-fold cross validation
-trctrl <- trainControl(method = "repeatedcv",
-                              repeats = 5,
-                              number = 10, 
-                              summaryFunction = defaultSummary, 
-                              savePredictions = TRUE)
+trctrl_NB <- trainControl(method = "repeatedcv",
+                          repeats = 5,
+                          number = 10,
+                          summaryFunction = defaultSummary,
+                          savePredictions = TRUE)
 
 # Train Naive Bayes model
 model_NB <- train(x = X_train, 
                   y = y_train, 
                   method = "naive_bayes", 
-                  trControl = trctrl,
+                  trControl = trctrl_NB,
                   tuneLength = data.frame(laplace = 0.5,
                                       usekernel = FALSE,
                                       adjust = FALSE))
@@ -740,9 +741,32 @@ confusionMatrix(predictions_NB, y_test)
 ```
 
 
-
 ### Shrinkage classification
+
 ## Logistic regression
+```{r}
+# Prepare training control
+trctrl_LR <- trainControl(method = "repeatedcv",
+                             repeats = 1,
+                             number = 5)
+# Train model
+model_LR <- train(x = X_train, 
+                  y = y_train,
+                  method = "glmnet",
+                  family = "binomial",
+                  tuneGrid = expand.grid(alpha = seq(0, 2, 0.1), 
+                                       lambda = seq(0, .1, 0.01)),
+                  metric = "Accuracy",
+                  trControl = trctrl_LR)
+print(model_LR)
+
+# Predict on test data
+predictions_LR <- predict(model_LR, X_test)
+
+# Evaluate the model using confusion matrix
+confusionMatrix(predictions_LR, y_test)
+```
+
 # Conclusion
 
 ```{r}
@@ -753,7 +777,12 @@ confusionMatrix(predictions_NB, y_test)
 # Sin balanceo, sin log-transformation: 18.8344%
 ## NB ------------------------------------------------
 # Sin balanceo, sin log-transformation: 22.10377%
-# Sin balanceo, sin log-transformation: 21.39% (with caret) 
+# Sin balanceo, sin log-transformation: 21.39% (with caret)
+
+## Shrinkage -----------------------------------------
+
+## LR ------------------------------------------------
+# Sin balanceo, sin log-transformation: 19.62% (with caret)
 ```
 
 # References
