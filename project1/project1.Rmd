@@ -184,6 +184,11 @@ Since `MultipleLines` can be consider to have all the information needed, I will
 ```{r data_cleaning, echo=TRUE, results='hide'}
 ## Unique values of each variable ----------------------------------------------
 unique(data$SeniorCitizen) # It is already transform in 1's and 0's
+data$SeniorCitizen <- factor(data$SeniorCitizen, 
+                             levels = c(0, 1), 
+                             labels = c("No", "Yes"))
+unique(data$SeniorCitizen)
+
 
 cat_vars <- sapply(data, is.character) # Select qualitative variables
 lapply(data[, cat_vars], unique) # Print unique values
@@ -202,12 +207,14 @@ if (all(subset_no_Phone$MultipleLines == "No phone service")) {
 }
 
 # Combine PhoneService and MultipleLines on a new variable (PhoneServiceType)
+# Convert into a factor
 data <- data %>%
   mutate(PhoneServiceType = case_when(
-    MultipleLines == "No phone service" ~ 0,
-    MultipleLines == "No" ~ 1,
-    TRUE ~ 2
-  ))
+    MultipleLines == "No phone service" ~ "NoPhone",
+    MultipleLines == "No" ~ "PhoneSingle",
+    MultipleLines == "Yes" ~ "PhoneMultiple"
+  )) %>%
+  mutate(PhoneServiceType = factor(PhoneServiceType, levels = c("NoPhone", "PhoneSingle", "PhoneMultiple")))
 
 # Remove original variables
 data <- dplyr::select(data, -PhoneService, -MultipleLines)
@@ -314,19 +321,17 @@ For the second set of categorical parameter (`InternetService`, `Contract` and `
 
 ```{r encoding_categorical_vars, echo=TRUE, results='hide'}
 ## Binary encoding -------------------------------------------------------------
-data$gender <- as.integer(data$gender == "Female") # Assuming Female:1, Male:0
-
-data$Churn <- factor(data$Churn)
-levels(data$Churn) # Check the levels
 
 binary_variables <- c(
   "Partner", "Dependents", "OnlineSecurity", "OnlineBackup",
-  "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies"
+  "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies", "Churn"
 )
-# Assuming Yes:1, No:0
-data[binary_variables] <- lapply(data[binary_variables],
-                                 function(x) as.integer(x == "Yes"))
+for (var in binary_variables) {
+  data[[var]] <- factor(data[[var]], levels = c("No", "Yes"))
+}
 
+data$gender <- factor(data$gender)
+levels(data$gender) # Check the levels
 
 ## Multi-state variables -------------------------------------------------------
 # Rename levels to avoid misunderstands later
@@ -445,14 +450,14 @@ In a first general overview thanks to the table, we can see that `gender` as wel
 
 ```{r eda_binary_table}
 # For binary variables
-binary_variables <- c("gender", "SeniorCitizen", "Partner", "Dependents", 
+# Falta meter gender
+binary_variables <- c("SeniorCitizen", "Partner", "Dependents", 
                       "OnlineSecurity", "OnlineBackup", "DeviceProtection", 
                       "TechSupport", "StreamingTV", "StreamingMovies")
 
 # Information about data storage on training set -------------------------------
-mean_binary_values <- sapply(training[binary_variables], mean)
-mean_binary_table <- data.frame(Mean = mean_binary_values)
-pander(mean_binary_table)
+summary(training_transf)
+# TODO: Arreglar la tabla
 ```
 
 The following plots, shows the distribution of churn by each binary variable.
@@ -589,11 +594,14 @@ The task attempts to estimate whether or not a customer intends to stop using a 
 
 ```{r}
 # Divide into predictors and target both subsets
-X_train <- training_transf
-y_train <- training_transf %>% dplyr::select(Churn)
+X_train <- training_transf %>% dplyr::select(-Churn)
+#y_train <- training_transf %>% dplyr::select(Churn)
+y_train <- training_transf$Churn  # Extract as a vector
 
-X_test <- testing_transf
-y_test <- testing_transf %>% dplyr::select(Churn)
+X_test <- testing_transf %>% dplyr::select(-Churn)
+#y_test <- testing_transf %>% dplyr::select(Churn)
+y_test <- testing_transf$Churn  # Extract as a vector
+n_test <- dim(testing_transf)[1]
 ```
 
 ## Bayes classifiers
@@ -614,42 +622,29 @@ partimat(Churn ~ ., data=training_transf, method="qda")
 
 ```{r}
 # Predictions
-post_prob_qda = predict(model_QDA, training_transf)$posterior
-head(post_prob_qda)
+predictions_QDA <- predict(model_QDA, X_test)
 
+# Posterior probabilities
+post_prob_QDA <- predictions_QDA$posterior
+head(post_prob_QDA)
 # QDA into labels
-predictions_QDA = predict(model_QDA, training_transf)$class
-head(predictions_QDA)
-```
+predictions_QDA_label <- predictions_QDA$class 
+head(predictions_QDA_label)
 
-**Scatterplot with predictions**: good classifications in red and bad classifications in black
-
-QDA:
-
-```{r}
-colors_qda_good_bad <- c("black","red")[1*(training_transf[,5]==predictions_QDA)+1]
-pairs(training_transf[,1:4], 
+# Scatterplot with predictions: good->red and bad->black
+colors_QDA_good_bad <- c("black","red")[1*(testing_transf[,5]==predictions_QDA_label)+1]
+pairs(testing_transf[,1:4],
       main="Bad (in black) classifications with QDA",
-      pch=19, 
-      col=colors_qda_good_bad, 
+      pch=19,
+      col=colors_QDA_good_bad,
       lower.panel=NULL)
-```
 
-
-**Performance measures**
-
-Summarize accuracy (confusion matrix)
-
-```{r}
-confMat_QDA = table(predictions_QDA, training_transf$Churn)
-confMat_QDA
-```
-
-```{r}
-n <- dim(training_transf)[1]
-error_QDA <- (n - sum(diag(confMat_QDA)))/n
+# Performance measures
+confMat_QDA <- table(predictions_QDA$class, testing_transf$Churn)
+addmargins(confMat_QDA)
+# Error of the model
+error_QDA <- (n_test - sum(diag(confMat_QDA)))/n_test
 error_QDA
-# 24.21%, sin previo balanceo de clases
 ```
 
 ### LDA
@@ -660,8 +655,6 @@ model_LDA
 
 # TODO: (Not working) Exploratory Graph for LDA
 #partimat(Churn~., data=training_transf, methis='lda')
-
-n_test <- dim(testing_transf)[1]
 
 # Predictions
 predictions_LDA <- predict(model_LDA, X_test)
@@ -674,11 +667,11 @@ head(predictions_LDA_label)
 
 # TODO: Weird output
 # Scatterplot with predictions: good->red and bad->black
-colors_lda_goodbad<-c("black","red")[1*(training_transf[,5]==predictions_LDA)+1]
+colors_LDA_goodbad<-c("black","red")[1*(training_transf[,5]==predictions_LDA)+1]
 pairs(testing_transf[,1:4],
-      main="Bad (in black) classifications for LDA",
+      main="Bad (in black) classifications with LDA",
       pch=19,
-      col=colors_lda_goodbad,
+      col=colors_LDA_goodbad,
       lower.panel=NULL)
 
 # Plot
@@ -692,17 +685,53 @@ ggplot(testing_transf,
   geom_hline(yintercept=0.5)
 
 # Performance measures
-confMat_LDA <- table(predictions_LDA$class,testing_transf$Churn)
+confMat_LDA <- table(predictions_LDA$class, testing_transf$Churn)
 addmargins(confMat_LDA)
 error_LDA <- (n_test-sum(diag(confMat_LDA)))/n_test
-error_LDA #18.8344%
+error_LDA
 ```
 
 
 ### Naïve Bayes
+
+```{r}
+library(e1071)
+
+# Train Naïve Bayes model -> laplace controls smoothing of probabilities
+model_NB <- naiveBayes(X_train, y_train, laplace = 1)
+model_NB
+
+# Predict on test data
+predictions_NB <- predict(model_NB, X_test)
+
+# Evaluate the model
+confMat_NB <- table(Predicted = predictions_NB, Actual = y_test)
+addmargins(confMat_NB)
+
+# Error
+error_NB <- (n_test-sum(diag(confMat_NB)))/n_test
+error_NB 
+
+# Compute the confusion matrix using caret package
+confusionMatrix(predictions_NB, y_test)
+
+```
+
+
 ### Shrinkage classification
 ## Logistic regression
 # Conclusion
+
+```{r}
+############ Summary ERRORS ############
+## QDA -----------------------------------------------
+# Sin balanceo, sin log-transformation: 23.52523%
+## LDA -----------------------------------------------
+# Sin balanceo, sin log-transformation: 18.8344%
+## NB ------------------------------------------------
+# Sin balanceo, sin log-transformation: 22.10377%
+```
+
 # References
 
 ```{r eval=FALSE, echo=FALSE}
