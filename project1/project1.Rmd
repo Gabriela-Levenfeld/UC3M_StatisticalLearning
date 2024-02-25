@@ -661,28 +661,43 @@ model_LDA
 # TODO: (Not working) Exploratory Graph for LDA
 #partimat(Churn~., data=training_transf, methis='lda')
 
-# Postior probabilities
-post_prob_LDA = predict(model_LDA, training_transf)$posterior
+n_test <- dim(testing_transf)[1]
+
+# Predictions
+predictions_LDA <- predict(model_LDA, X_test)
+# Posterior probabilities
+post_prob_LDA <- predictions_LDA$posterior
 head(post_prob_LDA)
-
 # LDA into labels 
-predictions_LDA =predict(model_LDA, training_transf)$class 
-head(predictions_LDA)
+predictions_LDA_label <- predictions_LDA$class 
+head(predictions_LDA_label)
 
+# TODO: Weird output
 # Scatterplot with predictions: good->red and bad->black
-colors_lda_goodbad <- c("black","red")[1*(training_transf[,5]==predictions_LDA)+1]
-pairs(training_transf[,1:4],
+colors_lda_goodbad<-c("black","red")[1*(training_transf[,5]==predictions_LDA)+1]
+pairs(testing_transf[,1:4],
       main="Bad (in black) classifications for LDA",
       pch=19,
       col=colors_lda_goodbad,
       lower.panel=NULL)
 
+# Plot
+ggplot(testing_transf,
+       aes(x=1:n_test, y=predictions_LDA$posterior[,2], color=Churn)) +
+  theme_light(base_size=8) +
+  geom_point(size=1) + 
+  scale_color_manual(values=c("deepskyblue2","firebrick2")) +
+  xlab("Individual") +
+  ylab("Probability of default with LDA") +
+  geom_hline(yintercept=0.5)
+
 # Performance measures
-confMat_LDA=table(predictions_LDA, training_transf$Churn)
-confMat_LDA
-error_LDA=(n-sum(diag(confMat_LDA)))/n
-error_LDA #20.44%
+confMat_LDA <- table(predictions_LDA$class,testing_transf$Churn)
+addmargins(confMat_LDA)
+error_LDA <- (n_test-sum(diag(confMat_LDA)))/n_test
+error_LDA #18.8344%
 ```
+
 
 ### Naïve Bayes
 ### Shrinkage classification
