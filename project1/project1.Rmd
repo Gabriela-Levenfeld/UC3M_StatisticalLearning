@@ -20,6 +20,7 @@ output:
     keep_tex: true
 subtitle: MS in Statistics for Data Science
 bibliography: references.bib
+biblio-style: ieee
 nocite: '@*'
 link-citations: true
 linkcolor: blue
@@ -35,76 +36,78 @@ knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 
 ## Dataset description
 
-Data can be found in Kaggle: <https://www.kaggle.com/datasets/blastchar/telco-customer-churn>.
+The dataset used for develop this task is available on Kaggle [@kaggle_telco_churn] and contains information of a Telco company from $7043$ clients, distributed across $21$ different variables such as `gender`, `MonthlyCharges`, and `PhoneService`, among others.
 
-It contains information from $7043$ clients distributed into $21$ different variables.
+In business sector, knowing the number of customers gained and lost is crucial for making profit. Thus, analyzing if a client is thinking about changing its services into another company can help to evaluate and make new company's strategies. This dataset is designed in order to predict customer churn, where it has been collect the final decision for each client.
 
-This dataset is made in order to predict *customer churn*. In the business sector, in order to make a profit, the number of customers gained and lost is really important. It not only allow us to compute the benefit that a company can have, it is also a good metric to evaluate and get insight about the strategy we are employing. This, let us to make decisions to make the next steps.
 
 ## Variables description
 
-The information contained in this dataset can be group into different areas.
+The information contained in the dataset can be group into different areas:
 
-\underline{Personal information about the customer}.
+**Personal information**.
 
-- `customerID`: Unique identifier for the client.
+-   `customerID`; A unique identifier for the client.
 
-- `gender`: Female or Male.
+-   `gender`; The customer's gender, Female or Male.
 
-- `SeniorCitizen`: Binary variable that indicates if >65 (yes) or not (no).
+-   `SeniorCitizen`;  Binary variable indicating if the customer is older than 65 (Yes) or not (No).
 
-- `Partner`: Whether the customer has a partner or not (Yes, No).
+-   `Partner`; Binary variable which storage whether the customer has a partner (Yes) or not (No).
 
-- `Dependents`: Variables which storage if the client lives with more people (children, parents, grandparents,...).
+-   `Dependents`; Binary variable that indicates if the client lives with more people (Yes) or not (No).
 
-\underline{Services subscribed}.
+**Services subscribed**.
 
-- `tenure`: Indicates the total amount of months that the customer has been with the company by the end of the 3Q (third quarter).
+-   `tenure`; The number of moths the customer has been with the company by the end of the third quarter (3Q).
 
-- `PhoneService`: Yes if client is subscribed to home phone service with the company and No if not.
+-   `PhoneService`; Whether the customer subscribes to home phone service (Yes or No).
 
-- `MultipleLines`: Yes if the client has more than 1 telephone lines with the company and No if just one.
+-   `MultipleLines`; Whether the customer has more than one telephone lines (Yes or No). This service is on ly available if the user has active the `PhoneService`.
 
-- `InternetService`:  Indicates if the customer subscribes to Internet service with the company: No, DSL, Fiber Optic, Cable. 4 options are available.
+-   `InternetService`; Type of subscription to Internet service (No, DSL, Fiber Optic, or Cable).
 
-- `OnlineSecurity`: Yes if the client has online security service (extra service) provided by the company and No if not.
+The following extra-services are only available for user who has active the `InternetService` (the company does not charge any additional fee).
 
-- `OnlineBackup`:  Indicates if the customer subscribes to an additional online backup service provided by the company: Yes, No.
+-   `OnlineSecurity`; Whether the customer subscribes to an online security service (Yes or No).
 
-- `DeviceProtection`: Indicates if the customer subscribes to an additional device protection plan for their Internet equipment provided by the company: Yes, No.
+-   `OnlineBackup`; Whether the customer subscribes to an online backup service (Yes or No).
 
-- `TechSupport`: Indicates if the customer subscribes to an additional technical support plan from the company with reduced wait times: Yes, No.
+-   `DeviceProtection`; Whether the customer subscribes to a device protection plan (Yes or No).
 
-- `StreamingTV`: Indicates if the customer uses their Internet service to stream television programing from a third party provider: Yes, No. The company does not charge an additional fee for this service.
+-   `TechSupport`; Whether the customer subscribes to a technical support plan from the company with reduced wait times (Yes or No).
 
-- `StreamingMovies`: Indicates if the customer uses their Internet service to stream movies from a third party provider: Yes, No. The company does not charge an additional fee for this service
+-   `StreamingTV`; Whether the customer use the Internet service to stream television programming (Yes, No).
 
-\underline{Account information}
+-   `StreamingMovies`; Whether the customer use the Internet service to stream movies (Yes, No).
 
-- `Contract`: Indicates the customer’s current contract type: Month-to-Month, One Year, Two Year.
+**Account information**
 
-- `PaperlessBilling`: Indicates if the customer has chosen paperless billing: Yes, No.
+-   `Contract`; The type of contract that the customer have signed (Month-to-Month, One Year, Two Year).
 
-- `PaymentMethod`: Indicates how the customer pays their bill: Bank Withdrawal, Credit Card, Mailed Check.
+-   `PaperlessBilling`; Whether the customer has chosen paperless billing (Yes or No).
 
-- `MonthlyCharges`:  Indicates the customer’s current total monthly charge for all their services from the company.
+-   `PaymentMethod`; Customer payment method (Bank Withdrawal, Credit Card, or Mailed Check)
 
-- `TotalCharges`: Indicates the customer’s total charges, calculated to the end of the 3Q (third quarter).
+-   `MonthlyCharges`; Customer monthly charges for all services from the company.
 
-\underline{Target variable}
+-   `TotalCharges`; Total expenses calculated to the end of the 3Q (third quarter).
 
-- `Churn`: Yes = the customer left the company this quarter. No = the customer remained with the company.
+**Target variable**
 
+-   `Churn`; Whether the customer left the company (Yes) this quarter or stay with the company (No).
 
 ## Goal
 
-Prediction over the `Churn` variable. Binary classification problem, where we want to predict is a client is going to continue with the services provided by the company. Or if he is going to leave.
+The objective of this assignment is to predict the `Churn` variable, which represents whether a client will remain with or leave from the company's services within the coming time period. This prediction task is a binary classification problem where the goal is to forecast one of the two possible outcomes: churn yes (leave the company) or churn no (stay with the company services).
+
+This valuable information can provide insights to the company, that allow it to form better strategies and enhance customer retention by optimizing service offering, as well as increase its profitability.
 
 \pagebreak
+
 # Data preprocessing
 
 In this first section, we must prepare the dataset in order to use it for the computational model. This means handling missing data, deleting unnecessary information, encoding categorical variables and splitting the data, among other.
-
 
 ## 1. Load material.
 
@@ -136,16 +139,19 @@ data <- read.csv("Telco-Customer-Churn.csv", header = TRUE, sep = ",")
 
 **First look at the dataset**.
 
-```{r small_EDA}
+```{r small_EDA1, eval=FALSE, include=FALSE}
 # Small Exploratory Data Analysis
 #skim(data)
 # Presents results for every column; the statistics it provides depend on the class of the variable
 
-glimpse(data)
-
 # For visualize the first 2 rows
 #head(data, 2)
 ```
+
+```{r small_EDA2}
+glimpse(data)
+```
+
 
 ## 2. Delete unnecessary information.
 
@@ -162,24 +168,23 @@ By analyzing the dataset we can realized that there exists some variables that a
 
 \underline{Combine `PhoneService` and `MultipleLines`}. The first variable indicates if the client has sign up for home phone service or not. Only when the client has hired for this service, he can choose between having $1$ phone line (`MultipleLines`=No) or have more than $1$ (`MultipleLines`=Yes). This relationship lead us into three possible scenarios:
 
-1. `PhoneService`=No and `MultipleLines`="No phone service". Customers who do not have phone service.
+1.  `PhoneService`=No and `MultipleLines`="No phone service". Customers who do not have phone service.
 
-2. `PhoneService`=Yes and `MultipleLines`=No. Customers who have phone service and choose to have a single line.
+2.  `PhoneService`=Yes and `MultipleLines`=No. Customers who have phone service and choose to have a single line.
 
-3. `PhoneService`=Yes and `MultipleLines`=Yes. Customers who have phone service and choose to have multiple lines.
+3.  `PhoneService`=Yes and `MultipleLines`=Yes. Customers who have phone service and choose to have multiple lines.
 
 Since `MultipleLines` can be consider to have all the information needed, I will combine this two variables on a new parameter named `PhoneServiceType` and treat it as a multi-state category with three options:
 
-- $0$: if there is no phone service.
+-   $0$: if there is no phone service.
 
-- $1$: if there is phone service with a single line.
+-   $1$: if there is phone service with a single line.
 
-- $2$: if there is phone service with multiple lines.
+-   $2$: if there is phone service with multiple lines.
 
 \underline{`InternetService` and its associate variables}. Something similar happend on this situation. Clients who have no sign up for Internet service, they are no be able to sign up for extra-services associated with it such as `OnlineSecurity`, `StreamingTV`, among others. The dataset storage this information of extra-services with "Yes", "No" or "No internet service". It is clearly that we can reduce this multi-state variables issue into a binary class. So "No phone service" will be understand simply as the customer does not have this service on (setting the parameter value into "No").
 
 **Note**: For both situation, we check there was no mistake on the data. So it has been computationally verified that there is concordance between the relationships of these variables. Thus avoiding the existence of possible nonsense situations.
-
 
 ```{r data_cleaning, echo=TRUE, results='hide'}
 ## Unique values of each variable ----------------------------------------------
@@ -246,11 +251,11 @@ On this dataset there are some missing values contained in the variable `TotalCh
 
 Take in mind, these values represent only $0.1561834\%$ of customers in the dataset, the following approach could be followed:
 
-- **Delete this rows**; due to the low presence of missing values the data will not be affected.
+-   **Delete this rows**; due to the low presence of missing values the data will not be affected.
 
-- **Set to $0$**; these observations correspond to new clients, therefore, not it has not passed enough time to compute this value.
+-   **Set to** $0$; these observations correspond to new clients, therefore, note it has not passed enough time to compute this value.
 
-- **Imputation**; selected option thereby some techniques seen during lecture can be apply.
+-   **Imputation**; selected option thereby some techniques seen during lecture can be apply.
 
 For imputing the missing data the R library call `mice` is used. Instead of making a random prediction, `mice` by default makes $5$. However, in this exercise we will only choose the first of the five. Additionally, the method we will use will be 'pmm', which stands for predictive mean matching. That is, the data will be imputed taking the mean as a reference. Once we have generated the imputed data, we have to introduce it in our data. The easiest way to do this is with the `complete()` function, which complete the missing values with the values of the first imputation of the five that we just made.
 
@@ -280,16 +285,18 @@ mice_model <- mice(data,
 )
 data <- complete(mice_model, 1) # Complete the data with the first imputation
 
-par(nfrow=c(1,2))
-# Represent the % of missing data
+par(mfrow = c(1, 2)) # Set up plotting area to have 1 row and 2 columns
+# Plot 1: Represent the % of missing data
 aggr(data,
   col = c("navyblue", "yellow"), numbers = TRUE, sortVars = FALSE,
   labels = names(data), cex.axis = .7, gap = 3,
   ylab = c("Missing data", "Real data")
 )
 
-# Check it follows the distribution of the original variable
+# Plot 2: Check it follows the distribution of the original variable
 densityplot(mice_model, scales = list(x = list(relation = "free")))
+
+par(mfrow = c(1, 1)) # Reset par to default
 ```
 
 Due to it does not fit properly, as we can see on the density plot, I believe setting this observation to $0$ is the best option, among all.
@@ -300,24 +307,21 @@ print(data[489,]) # User with TotalCharges=NA, after imputation
 print(data[490,]) # Normal user
 ```
 
-
 ## 5. Encoding categorical variables.
 
 **Categorical variables**.
 
-- Binary variables. $11$: `gender`, `SeniorCitizen`, `Partner`, `Dependents`, `OnlineSecurity`, `OnlineBackup`, `DeviceProtection`, `TechSupport`, `StreamingTV`, `StreamingMovies` and `Churn`.
+-   Binary variables. $11$: `gender`, `SeniorCitizen`, `Partner`, `Dependents`, `OnlineSecurity`, `OnlineBackup`, `DeviceProtection`, `TechSupport`, `StreamingTV`, `StreamingMovies` and `Churn`.
 
 For these variables, I will establish "No" values as $0$ and "Yes" as $1$'s.
 
-- Multi-sate variables. $4$: `InternetService`, `Contract`,  `PaymentMethod`, `PhoneServiceType`.
+-   Multi-sate variables. $4$: `InternetService`, `Contract`, `PaymentMethod`, `PhoneServiceType`.
 
 On the other hand, to manage this section is a little bit more complicated and we need to be aware of the presence or absence of some natural order on it.
 
-Strategy 1: Natural order.
-`PhoneServiceType` preserve a natural order. As a consequence this parameter, will be encode preserving the order. It is worth to mention that `PhoneServiceType` is already encode. And the idea explained above has been apply, values set as $0$, $1$ and $2$.
+Strategy 1: Natural order. `PhoneServiceType` preserve a natural order. As a consequence this parameter, will be encode preserving the order. It is worth to mention that `PhoneServiceType` is already encode. And the idea explained above has been apply, values set as $0$, $1$ and $2$.
 
-Strategy 2: No order.
-For the second set of categorical parameter (`InternetService`, `Contract` and `PaymentMethod`). I will create factors variables. This is because, for instance, on the `InternetService` parameter, "Fiber Optic" is not inherently greater than "DSL". Same happens with the rest of variables mention.
+Strategy 2: No order. For the second set of categorical parameter (`InternetService`, `Contract` and `PaymentMethod`). I will create factors variables. This is because, for instance, on the `InternetService` parameter, "Fiber Optic" is not inherently greater than "DSL". Same happens with the rest of variables mention.
 
 ```{r encoding_categorical_vars, echo=TRUE, results='hide'}
 ## Binary encoding -------------------------------------------------------------
@@ -377,16 +381,13 @@ nrow(training)
 nrow(testing)
 ```
 
-
 # Exploratory Data Analysis (EDA)
 
 ## Numeric variables.
 
 `ggpair` function allow us to create a scatter plot matrix for this three variables. For the visualization of this parameters, I decide to plot histograms.
 
-This matrix provides a visual representation, featuring histogram plots for each variable along the diagonal and showcasing pairwise relationships between variables in the lower triangular section. It also show on the top triangular the correlation coefficients for each pair of variables. 
-The idea is to identify the shape distribution, tendencies, outliers, among other things, thanks to different views in one grid.
-
+This matrix provides a visual representation, featuring histogram plots for each variable along the diagonal and showcasing pairwise relationships between variables in the lower triangular section. It also show on the top triangular the correlation coefficients for each pair of variables. The idea is to identify the shape distribution, tendencies, outliers, among other things, thanks to different views in one grid.
 
 ```{r scatterPlot_contiuous}
 # Select continuous variables
@@ -402,17 +403,17 @@ ggpairs(continuous_data,
        )
 ```
 
-- **Tenure**
+-   **Tenure**
 
 The histogram shows a bimodal distribution, with peaks at the extremes of the range. This implies that most of the customers are either new (low peak) or very loyal (high peak), with fewer clients in the mid-range.
 
-- **MonthlyCharges**
+-   **MonthlyCharges**
 
-It can be observe a big peak at the begging of the distribution which represent a big amount of clients that pays around 25\$ per month on this company. On the other hand, there are more less a uniform number of customers that pays from 60\$ to 120\$. 
+It can be observe a big peak at the begging of the distribution which represent a big amount of clients that pays around 25\$ per month on this company. On the other hand, there are more less a uniform number of customers that pays from 60\$ to 120\$.
 
-- **TotalCharges**
+-   **TotalCharges**
 
-It follows a right skewness distribution, which means most of the people are subscribe to services that require to pay less amount of money. It is clear, that clients are willing to pay around $1250 \$$.
+It follows a right skewness distribution, which means most of the people are subscribe to services that require to pay less amount of money. It is clear, that clients are willing to pay around $1250 \$$. For trying to achieve a normal distribution I will apply a log transformation on this variable.
 
 If we deeper explore this variable related with the output, we get to the conclusion that clients who have not spent much are more likely to churn (`Churn`=$1$). On the other hand, clients that spend more amount of money, tends to stay more time with this company (`Churn`=$0$).
 
@@ -425,22 +426,24 @@ ggplot(training, aes(x = TotalCharges, fill = factor(Churn))) +
   ggtitle("Density plot of TotalCharges by Churn status")
 ```
 
-
 **General insights**. The scatter plot matrix shown that none of the numeric variables follow a normal distribution. Due to the used of some methods, the data will be standardized. In addition, it is worth mentioning the high correlation presented between the variables, which are the ones that are above $0.7$: `tenure`-`TotalCharges` with a coefficient of $0.823$.
 
 ```{r numeric_transf}
 # Numeric transformation
 # TRAINING dataset -------------------------------------------------------------
 training_transf <- training
+# Log-transformation to solve TotalCharges right skewness
+training_transf$TotalCharges <- log(training_transf$TotalCharges)
 # Standardizing the variables
 training_transf[c("tenure", "MonthlyCharges", "TotalCharges")] <- scale(training_transf[c("tenure", "MonthlyCharges", "TotalCharges")])
 
 # TESTING dataset --------------------------------------------------------------
 testing_transf <- testing
+# Log-transformation to solve TotalCharges right skewness
+testing_transf$TotalCharges <- log(testing_transf$TotalCharges)
 # Standardizing the variables
 testing_transf[c("tenure", "MonthlyCharges", "TotalCharges")] <- scale(testing_transf[c("tenure", "MonthlyCharges", "TotalCharges")])
 ```
-
 
 ## Cualitative variables.
 
@@ -462,8 +465,7 @@ summary(training_transf)
 
 The following plots, shows the distribution of churn by each binary variable.
 
-It can clearly, be observed that the lost of clients is very similar independently of the `gender` of the client and if the customer has a partner or not.
-Something similar happens with the remain variables. It is not a clear pattern.
+It can clearly, be observed that the lost of clients is very similar independently of the `gender` of the client and if the customer has a partner or not. Something similar happens with the remain variables. It is not a clear pattern.
 
 ```{r eda_binary_plot}
 # Plots Churn by variable ------------------------------------------------------
@@ -490,7 +492,7 @@ combined_plots
 
 **Category variables**.
 
-Recall there are $4$ variables: `InternetService`, `Contract`,  `PaymentMethod`, `PhoneServiceType`. With the following plot we can observed how categories are distribute on a variable. Distribution of `PhoneServiceType` and `InternetService`, lead us into the conclusion that most of the clients choose having phone/internet service above not having. On the other hand, `PaymentMethod` are more less equally distributed hence customer might not have a prefer way to pay. Finally, it looks like clients favorite contract type is to revenue it month by month.
+Recall there are $4$ variables: `InternetService`, `Contract`, `PaymentMethod`, `PhoneServiceType`. With the following plot we can observed how categories are distribute on a variable. Distribution of `PhoneServiceType` and `InternetService`, lead us into the conclusion that most of the clients choose having phone/internet service above not having. On the other hand, `PaymentMethod` are more less equally distributed hence customer might not have a prefer way to pay. Finally, it looks like clients favorite contract type is to revenue it month by month.
 
 ```{r eda_category_distribution}
 # InternetService
@@ -549,7 +551,6 @@ ggplot(category_data, aes(x = value, fill = Churn)) +
         strip.text.x = element_text(size = 10))
 ```
 
-
 ## Correlation matrix
 
 ```{r correlation_matrix}
@@ -561,13 +562,11 @@ ggcorr(training[,-1], label = T)
 # TODO: Add some conclusion about variables more influential
 ```
 
-
 This matrix give us the strength and direction of relationship between the variables of my dataset. In where, larger values (does not matter if positive or negative) suggest a stronger relationships.
 
 If the coefficient is positive, then this means that if one of the evaluated variables increases (or decreases) the other will also do so. While if the coefficient is negative; While one variable increases, the other decreases.
 
 Next step, consist on getting the determinant and trace of the covariance matrix in order to compare the results of the variables before and after applying the proper transformation.
-
 
 ## Target variable
 
@@ -586,11 +585,9 @@ table(X_train$Churn)/length(X_train$Churn)
 table(X_test$Churn)/length(X_test$Churn)
 ```
 
-
 # Statistical tools
 
-This second section aim is to evaluate the performance of different classification models for the binary classification task we are deal with. For each of these techniques, we will also compute the confusion matrix, a tool which will indicate us how many instances were correctly classified and how many were misclassified.
-The task attempts to estimate whether or not a customer intends to stop using a company's services based on sevaral variables such as gender, monthly charges, and payment method, among others.
+This second section aim is to evaluate the performance of different classification models for the binary classification task we are deal with. For each of these techniques, we will also compute the confusion matrix, a tool which will indicate us how many instances were correctly classified and how many were misclassified. The task attempts to estimate whether or not a customer intends to stop using a company's services based on sevaral variables such as gender, monthly charges, and payment method, among others.
 
 ```{r}
 # Divide into predictors and target both subsets
@@ -606,128 +603,95 @@ n_test <- dim(testing_transf)[1]
 
 ## Bayes classifiers
 
+We configure a comon train control parameter.
+
+```{r}
+# Set up train control -> 5 repeats of 10-fold cross validation
+train_ctrl <- trainControl(method = "repeatedcv",
+                           repeats = 5,
+                           number = 10)
+```
+
 ### QDA
 
 ```{r}
-model_QDA <- qda(Churn~., data=training_transf)
-model_QDA
-```
+# Train the QDA model using caret
+model_QDA <- train(Churn ~ .,    
+                    data = training_transf,
+                    method = "qda",
+                    trControl = train_ctrl) # Use the defined train control
+print(model_QDA)
 
-```{r eval=FALSE}
-# TODO: Not working
-# Exploratory graph for QDA
-library(klaR)
-partimat(Churn ~ ., data=training_transf, method="qda")
-```
-
-```{r}
 # Predictions
 predictions_QDA <- predict(model_QDA, X_test)
+head(predictions_QDA)
 
 # Posterior probabilities
-post_prob_QDA <- predictions_QDA$posterior
+post_prob_QDA <- predict(model_QDA, X_test, type = "prob")
 head(post_prob_QDA)
-# QDA into labels
-predictions_QDA_label <- predictions_QDA$class 
-head(predictions_QDA_label)
-
-# Scatterplot with predictions: good->red and bad->black
-colors_QDA_good_bad <- c("black","red")[1*(testing_transf[,5]==predictions_QDA_label)+1]
-pairs(testing_transf[,1:4],
-      main="Bad (in black) classifications with QDA",
-      pch=19,
-      col=colors_QDA_good_bad,
-      lower.panel=NULL)
 
 # Performance measures
-confMat_QDA <- table(predictions_QDA$class, testing_transf$Churn)
+confMat_QDA <- table(predictions_QDA, testing_transf$Churn)
 addmargins(confMat_QDA)
+
 # Error of the model
-error_QDA <- (n_test - sum(diag(confMat_QDA)))/n_test
+error_QDA <- (n_test - sum(diag(confMat_QDA))) / n_test
 error_QDA
+
+# Plot
+ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
+  geom_point(aes(y = post_prob_QDA[,"Yes"], color = Churn)) +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("No" = "deepskyblue2", "Yes" = "firebrick2")) +
+  xlab("Individual") +
+  ylab("Probability of Churn with QDA") +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
 ```
 
 ### LDA
 
 ```{r}
-model_LDA <- lda(Churn~., data=training_transf)
-model_LDA
-
-# TODO: (Not working) Exploratory Graph for LDA
-#partimat(Churn~., data=training_transf, methis='lda')
+# Train the LDA model using caret
+model_LDA <- train(Churn ~ .,    
+                    data = training_transf,
+                    method = "lda",
+                    trControl = train_ctrl) # Use the defined train control
+print(model_LDA)
 
 # Predictions
 predictions_LDA <- predict(model_LDA, X_test)
+head(predictions_LDA)
+
 # Posterior probabilities
-post_prob_LDA <- predictions_LDA$posterior
+post_prob_LDA <- predict(model_LDA, X_test, type = "prob")
 head(post_prob_LDA)
-# LDA into labels 
-predictions_LDA_label <- predictions_LDA$class 
-head(predictions_LDA_label)
-
-# TODO: Weird output
-# Scatterplot with predictions: good->red and bad->black
-colors_LDA_goodbad<-c("black","red")[1*(training_transf[,5]==predictions_LDA)+1]
-pairs(testing_transf[,1:4],
-      main="Bad (in black) classifications with LDA",
-      pch=19,
-      col=colors_LDA_goodbad,
-      lower.panel=NULL)
-
-# Plot
-ggplot(testing_transf,
-       aes(x=1:n_test, y=predictions_LDA$posterior[,2], color=Churn)) +
-  theme_light(base_size=8) +
-  geom_point(size=1) + 
-  scale_color_manual(values=c("deepskyblue2","firebrick2")) +
-  xlab("Individual") +
-  ylab("Probability of default with LDA") +
-  geom_hline(yintercept=0.5)
 
 # Performance measures
-confMat_LDA <- table(predictions_LDA$class, y_test)
+confMat_LDA <- table(predictions_LDA, testing_transf$Churn)
 addmargins(confMat_LDA)
-error_LDA <- (n_test-sum(diag(confMat_LDA)))/n_test
-error_LDA
-```
 
+# Error of the model
+error_LDA <- (n_test - sum(diag(confMat_LDA))) / n_test
+error_LDA
+
+# Plot
+ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
+  geom_point(aes(y = post_prob_LDA[,"Yes"], color = Churn)) +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("No" = "deepskyblue2", "Yes" = "firebrick2")) +
+  xlab("Individual") +
+  ylab("Probability of Churn with LDA") +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+```
 
 ### Naïve Bayes
 
 ```{r}
-# Train Naïve Bayes model -> laplace controls smoothing of probabilities
-#model_NB <- naiveBayes(X_train, y_train, laplace = 1)
-model_NB <- naiveBayes(X_train, y_train, laplace = 1)
-model_NB
-
-# Predict on test data
-predictions_NB <- predict(model_NB, X_test)
-
-# Evaluate the model
-confMat_NB <- table(Predicted = predictions_NB, Actual = y_test)
-addmargins(confMat_NB)
-
-# Error
-error_NB <- (n_test-sum(diag(confMat_NB)))/n_test
-error_NB 
-```
-
-```{r}
-# Naïve Bayes with Caret
-library(e1071)
-
-# Set up train control -> 5 repeats of 10-fold cross validation
-trctrl_NB <- trainControl(method = "repeatedcv",
-                          repeats = 5,
-                          number = 10,
-                          summaryFunction = defaultSummary,
-                          savePredictions = TRUE)
-
 # Train Naive Bayes model
 model_NB <- train(x = X_train, 
                   y = y_train, 
                   method = "naive_bayes", 
-                  trControl = trctrl_NB,
+                  trControl = train_ctrl,
                   tuneLength = data.frame(laplace = 0.5,
                                       usekernel = FALSE,
                                       adjust = FALSE))
@@ -735,36 +699,174 @@ model_NB <- train(x = X_train,
 
 # Predict on test data
 predictions_NB <- predict(model_NB, newdata = X_test)
+head(predictions_NB)
+
+# Posterior probabilities
+post_prob_NB <- predict(model_NB, X_test, type = "prob")
+head(post_prob_NB)
 
 # Evaluate the model using confusion matrix
 confusionMatrix(predictions_NB, y_test)
-```
 
+# Performance measures -> withou using caret
+confMat_NB <- table(predictions_NB, testing_transf$Churn)
+addmargins(confMat_NB)
+
+# Error of the model
+error_NB <- (n_test - sum(diag(confMat_NB))) / n_test
+error_NB
+
+# Plot
+ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
+  geom_point(aes(y = post_prob_NB[,"Yes"], color = Churn)) +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("No" = "deepskyblue2", "Yes" = "firebrick2")) +
+  xlab("Individual") +
+  ylab("Probability of Churn with Naïve Bayes") +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+```
 
 ### Shrinkage classification
 
 ## Logistic regression
+
 ```{r}
-# Prepare training control
-trctrl_LR <- trainControl(method = "repeatedcv",
-                             repeats = 1,
-                             number = 5)
-# Train model
-model_LR <- train(x = X_train, 
-                  y = y_train,
-                  method = "glmnet",
-                  family = "binomial",
-                  tuneGrid = expand.grid(alpha = seq(0, 2, 0.1), 
-                                       lambda = seq(0, .1, 0.01)),
-                  metric = "Accuracy",
-                  trControl = trctrl_LR)
+model_LR <- train(Churn ~.,
+                  data = training_transf,
+                  method = "glm",
+                  family = "binomial", # For binary logistic regression
+                  trControl = train_ctrl)
+
+# Print the model summary
 print(model_LR)
 
 # Predict on test data
 predictions_LR <- predict(model_LR, X_test)
+head(predictions_LR)
+
+# Posterior probabilities
+post_prob_LR <- predict(model_LR, X_test, type = "prob")
+head(post_prob_LR)
 
 # Evaluate the model using confusion matrix
 confusionMatrix(predictions_LR, y_test)
+
+# Performance measures -> without using caret
+confMat_LR <- table(predictions_LR, testing_transf$Churn)
+addmargins(confMat_LR)
+
+# Error of the model
+error_LR <- (n_test - sum(diag(confMat_LR))) / n_test
+error_LR
+
+# Plot
+ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
+  geom_point(aes(y = post_prob_LR[,"Yes"], color = Churn)) +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("No" = "deepskyblue2", "Yes" = "firebrick2")) +
+  xlab("Individual") +
+  ylab("Probability of Churn with Logistic regression") +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+```
+
+## Incorporing economic impact
+
+From all models compute, I choose as the best one the one with lowest error and highest accuracy. This models is the Logistic Regression classifier.
+
+**Recall**. `Churn`: Yes = the customer left the company and No = the customer remained with the company.
+
+
+
+Peor error para la company: -\> predecir que se queda (NO) -\> valor real que se vaya (YES)
+
+```         
+      Reference
+```
+
+Prediction No Yes No 944 168 Yes 90 205
+
+Note: filas (lo que se predice) columnas (valor real)
+
+Peor error en la tabla es: 168
+
+Table of profits:
+
+| Prediction/Actual |  Stay | Leave |
+|-------------------|------:|------:|
+| Stay              |   0.0 |  -1.0 |
+| Leave             | -0.01 |   0.0 |
+
+For instance, a naive manager would incur a profit per applicant of $0.12\times0.93 - 1.0\times0.07 - 0.01\times0.0 + 0.0\times0.0 = 0.0416$
+
+This is the profit we should improve
+
+Profit table as a vector:
+
+```{r}
+profit.unit <- c(0.12, -0.01, -1.0, 0.0)
+
+## Selecting the optimal threshold to give the loan
+profit.i = matrix(NA, nrow = 50, ncol = 10)
+# 100 replicates for training/testing sets for each of the 10 values of threshold
+
+p0=0.8
+p1=1-p0
+
+j <- 0
+
+# This is for doing hyper-parameter
+for (threshold in seq(0.05,0.5,0.05)){
+  #for (p1 in c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9)){
+  
+  j <- j + 1
+  cat(j)
+  for(i in 1:50){
+    
+    # partition data intro training (40%) and testing sets (60%)
+    d <- createDataPartition(training_transf$Churn, p = 0.4, list = FALSE)
+    # select training sample
+    
+    train<-training[d,]
+    test <-training[-d,]  
+    
+    #p1=1-p0
+    # Fit logistic regression model
+    full.model <- glm(Churn ~ ., data = train, family = "binomial")
+    
+    # Obtain predicted probabilities on test set
+    probabilities <- predict(full.model, newdata = test, type = "response")
+
+    # Convert probabilities to predicted classes based on threshold
+    Churn_pred <- ifelse(probabilities > threshold, "Yes", "No")
+    
+    # Create confusion matrix
+    CM <- table(Churn_pred, test$Churn)
+
+    # Calculate profit per applicant
+    profit.applicant <- sum(profit.unit*CM)/sum(CM)
+    profit.i[i,j] <- profit.applicant
+    
+  }
+}
+
+
+boxplot(profit.i, main = "Hyper-parameter selection",
+        ylab = "unit profit",
+        xlab = "threshold", names = seq(0.05,0.5,0.05),col="royalblue2")
+
+
+apply(profit.i, 2, median) 
+```
+
+```{r eval=FALSE}
+lr.model <- glm(Churn ~ ., data = train, family = "binomial")
+probability = predict(lr.model, testing_transf$Churn)$posterior
+threshold = 0.019096421
+Cred.pred = rep("Good", nrow(testing))
+Cred.pred[which(probability[,2] > threshold)] = "Bad"
+CM = confusionMatrix(factor(Cred.pred), testing$Creditability)$table
+profit.applicant <- sum(profit.unit*CM)/sum(CM)
+profit.applicant
 ```
 
 # Conclusion
@@ -773,16 +875,20 @@ confusionMatrix(predictions_LR, y_test)
 ############ Summary ERRORS ############
 ## QDA -----------------------------------------------
 # Sin balanceo, sin log-transformation: 23.52523%
+# Sin balanceo, con log-transformation: 22.95665
 ## LDA -----------------------------------------------
 # Sin balanceo, sin log-transformation: 18.8344%
+# Sin balanceo, con log-transformation: 18.69225%
 ## NB ------------------------------------------------
 # Sin balanceo, sin log-transformation: 22.10377%
 # Sin balanceo, sin log-transformation: 21.39% (with caret)
+# Sin balanceo, con log-transformation: 21.03767%
 
 ## Shrinkage -----------------------------------------
 
 ## LR ------------------------------------------------
 # Sin balanceo, sin log-transformation: 19.62% (with caret)
+# Sin balanceo, con log-transformation: 18.33689%
 ```
 
 # References
@@ -792,4 +898,5 @@ confusionMatrix(predictions_LR, y_test)
 # knitr::write_bib(.packages(), "references.bib")
 ```
 
-<div id="refs"></div>
+::: {#refs}
+:::
