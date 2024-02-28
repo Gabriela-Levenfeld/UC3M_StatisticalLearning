@@ -24,7 +24,6 @@ knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 ```
 
 \pagebreak
-
 # Introduction
 
 ## Dataset description
@@ -97,7 +96,6 @@ The objective of this assignment is to predict the `Churn` variable, which repre
 This valuable information can provide insights to the company, that allow it to form better strategies and enhance customer retention by optimizing service offering, as well as increase its profitability.
 
 \pagebreak
-
 # Data preprocessing
 
 This section focuses on preparing the dataset for exploratory data analysis (EDA) and applying the computational models. This include loading the necessary material, handling missing values, encoding categorical variables, and splitting the dataset into training and testing subsets, among other tasks.
@@ -124,6 +122,7 @@ library(knitr)
 library(psych) # Compute the correlation matrix
 library(polycor) # Compute the correlation heatmap
 library(corrplot) # Visualize the correlation matrix
+library(pROC)
 ```
 
 **Load dataset**. Import the dataset.
@@ -659,59 +658,71 @@ After applying a sampling technique in order to solve this issue, no improvement
 \pagebreak
 # Statistical tools
 
-This second section aim is to evaluate the performance of different classification models for the binary classification task we are deal with. For each of these techniques, we will also compute the confusion matrix, a tool which will indicate us how many instances were correctly classified and how many were misclassified. The task attempts to estimate whether or not a customer intends to stop using a company's services based on sevaral variables such as gender, monthly charges, and payment method, among others.
+The objective of this section is to evaluate the performance of some classification models for the binary classification task. The goal is to predict whether the customer intends to stop using the company's services or not. For each of these techniques, we will compute the confusion matrix, a tool which will indicate us how many instances were correctly classified and how many were misclassified.
 
-```{r}
+First, the dataset is divided into predictors and the target variable.
+
+```{r split_subsets}
 # Divide into predictors and target both subsets
 X_train <- training_transf %>% dplyr::select(-Churn)
-#y_train <- training_transf %>% dplyr::select(Churn)
-y_train <- training_transf$Churn  # Extract as a vector
+y_train <- training_transf$Churn
 
 X_test <- testing_transf %>% dplyr::select(-Churn)
-#y_test <- testing_transf %>% dplyr::select(Churn)
-y_test <- testing_transf$Churn  # Extract as a vector
+y_test <- testing_transf$Churn
 n_test <- dim(testing_transf)[1]
 ```
 
-## Bayes classifiers
+To ensure a robust evaluation, a common training control parameter is configure: $5$ repeats of $10$-fold cross-validation.
 
-We configure a common train control parameter.
-
-```{r}
+```{r setUp_trainControl}
 # Set up train control -> 5 repeats of 10-fold cross validation
 train_ctrl <- trainControl(method = "repeatedcv",
                            repeats = 5,
-                           number = 10) # Resolve class imbalances
-
-# "smote" require the themis packages
+                           number = 10)
 ```
+
+Finally, it is worth mentioning that we generated a plot for all models with the posterior probabilities of churn for each observation in the test set. The point represent each predictions with the model we are evaluating, where blue points are the customers that decide to stay (`Churn`=No) and red points the ones that probably will abandond the company (`Churn`=Yes). The dashed horizontal line at $0.5$ serves as a decision threshold, indicating the probability level at which the model switches from predicting a customer will not churn to predicting they will churn. This allow us to give a visually representation of how the model is predicting.
+
+## Bayes classifiers
 
 ### QDA
 
-```{r}
+QDA refers to **Quadratic Discriminant Analysis**, this model assumes a Gaussian distributions of the predictors for each class but its covariance matrix can be different.
+
+```{r qda_classifier}
 # Train the QDA model using caret
 model_QDA <- train(Churn ~ .,    
                     data = training_transf,
                     method = "qda",
                     trControl = train_ctrl) # Use the defined train control
-print(model_QDA)
 
 # Predictions
 predictions_QDA <- predict(model_QDA, X_test)
-head(predictions_QDA)
+# head(predictions_QDA)
 
 # Posterior probabilities
 post_prob_QDA <- predict(model_QDA, X_test, type = "prob")
-head(post_prob_QDA)
+# head(post_prob_QDA)
 
 # Performance measures
 confMat_QDA <- table(predictions_QDA, testing_transf$Churn)
 addmargins(confMat_QDA)
+```
 
+
+```{r qda_measures, echo=FALSE}
+sprintf("------ Testing measures ------")
 # Error of the model
 error_QDA <- (n_test - sum(diag(confMat_QDA))) / n_test
-error_QDA
+sprintf("Error for QDA: %f", error_QDA)
 
+# Test accuracy
+acc_test_QDA <- sum(diag(confMat_QDA)) / n_test
+sprintf("Accuracy for QDA: %f", acc_test_QDA)
+```
+
+
+```{r qda_plot, fig.align='center', out.width="70%"}
 # Plot
 ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
   geom_point(aes(y = post_prob_QDA[,"Yes"], color = Churn)) +
@@ -722,32 +733,59 @@ ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 ```
 
+The confusion matrix and the plot represent the same idea in different manner. From the plot, we observe that the red points below and blue points above the threshold line are point that has been misclassifications. Meanwhile in the confusion matrix this clients can be found over the no-diagonal values.
+
+We can conclude that the model:
+
+- It is good at identifying the customers who will stay and actually stay at the company ($90.26$% right).
+
+- The worst mistake is when the model predict the client will stay and he actually left, and with QDA happens $86$ times.
+
+- The other possible error is when it predict the client will leave, but its real choice is that he will continue with the company ($237$ wrong identifications).
+
+- Finally, the model just gets right un $54.77$% when predicting the client will leave and actually leave.
+
+- Furthermore, the kappa value is not too high.
+
+
 ### LDA
 
-```{r}
+**Linear Discriminant Analysis** (LDA) is a simplified version of QDA model which introduce some bias to reduce the variance.
+
+```{r lda_classifier}
 # Train the LDA model using caret
 model_LDA <- train(Churn ~ .,    
                     data = training_transf,
                     method = "lda",
                     trControl = train_ctrl) # Use the defined train control
-print(model_LDA)
 
 # Predictions
 predictions_LDA <- predict(model_LDA, X_test)
-head(predictions_LDA)
+# head(predictions_LDA)
 
 # Posterior probabilities
 post_prob_LDA <- predict(model_LDA, X_test, type = "prob")
-head(post_prob_LDA)
+# head(post_prob_LDA)
 
 # Performance measures
 confMat_LDA <- table(predictions_LDA, testing_transf$Churn)
 addmargins(confMat_LDA)
+```
 
+
+```{r lda_measures, echo=FALSE}
+sprintf("------ Testing measures ------")
 # Error of the model
 error_LDA <- (n_test - sum(diag(confMat_LDA))) / n_test
-error_LDA
+sprintf("Error for QDA: %f", error_LDA)
 
+# Test accuracy
+acc_test_LDA <- sum(diag(confMat_LDA)) / n_test
+sprintf("Accuracy for QDA: %f", acc_test_LDA)
+```
+
+
+```{r lda_plot, fig.align='center', out.width="70%"}
 # Plot
 ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
   geom_point(aes(y = post_prob_LDA[,"Yes"], color = Churn)) +
@@ -757,10 +795,16 @@ ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
   ylab("Probability of Churn with LDA") +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 ```
+This model achieved an accuracy of $81.3077$% improving the QDA performance, thus we can conclude it is able to make good predictions about if a client will churn or not.
+
+However compared to QDA, the errors that suppose worse for the company have increase from $86$ to $163$. However, the mistakes from a client leaving the company but actually stay they really decrease. As before it accurate will identify people who will stay with the company.
+
 
 ### Naïve Bayes
 
-```{r}
+Model useful when the dataset is very large and on multi-class predictors. For this dataset might not work as well as QDA or LDA. On the contrary, it usually works good for predictor that are independence one from each other.
+
+```{r nb_classifier}
 # Train Naive Bayes model
 model_NB <- train(x = X_train, 
                   y = y_train, 
@@ -773,23 +817,36 @@ model_NB <- train(x = X_train,
 
 # Predict on test data
 predictions_NB <- predict(model_NB, newdata = X_test)
-head(predictions_NB)
+# head(predictions_NB)
 
 # Posterior probabilities
 post_prob_NB <- predict(model_NB, X_test, type = "prob")
-head(post_prob_NB)
+# head(post_prob_NB)
 
 # Evaluate the model using confusion matrix
 confusionMatrix(predictions_NB, y_test)
+```
 
-# Performance measures -> withou using caret
+
+```{r nb_ignore, eval=FALSE, include=FALSE}
+# Some manual calculation, however better use the confusionMatrix of caret
+
+# Performance measures -> without using caret
 confMat_NB <- table(predictions_NB, testing_transf$Churn)
 addmargins(confMat_NB)
 
+sprintf("------ Testing measures ------")
 # Error of the model
 error_NB <- (n_test - sum(diag(confMat_NB))) / n_test
-error_NB
+sprintf("Error for QDA: %f", error_NB)
 
+# Test accuracy
+acc_test_NB <- sum(diag(confMat_NB)) / n_test
+sprintf("Accuracy for QDA: %f", acc_test_NB)
+```
+
+
+```{r nb_measures, fig.align='center', out.width="70%"}
 # Plot
 ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
   geom_point(aes(y = post_prob_NB[,"Yes"], color = Churn)) +
@@ -800,39 +857,53 @@ ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 ```
 
-### Shrinkage classification
+In summary, the model achieved an accuracy of $78.96$%, which, while is not the highest accuracy among the models tested, is still pretty good. It demonstrates a string ability to correctly identify the client that will remain with the company (*Positive predictive Value*). However, regarding to the wrong predictions, it can be notice that it makes $108$ huge mistakes (which is in the average of the previous models).  
+
 
 ## Logistic regression
 
-```{r}
+Logistic regression is a statistical method for predicting binary problems which allow also use categorical predictors. It looks like a model that can fit pretty well with my classification task. However, it must be notice that it is sensitive to outliers on the data.
+
+```{r lr_classifier}
+# Train Logistic Regression classifier
 model_LR <- train(Churn ~.,
                   data = training_transf,
                   method = "glm",
                   family = "binomial", # For binary logistic regression
                   trControl = train_ctrl)
 
-# Print the model summary
-print(model_LR)
-
 # Predict on test data
 predictions_LR <- predict(model_LR, X_test)
-head(predictions_LR)
+# head(predictions_LR)
 
 # Posterior probabilities
 post_prob_LR <- predict(model_LR, X_test, type = "prob")
-head(post_prob_LR)
+# head(post_prob_LR)
 
 # Evaluate the model using confusion matrix
 confusionMatrix(predictions_LR, y_test)
+```
+
+
+```{r lr_ignore, eval=FALSE, include=FALSE}
+# Some manual calculation, however better use the confusionMatrix of caret
 
 # Performance measures -> without using caret
 confMat_LR <- table(predictions_LR, testing_transf$Churn)
 addmargins(confMat_LR)
 
+sprintf("------ Testing measures ------")
 # Error of the model
 error_LR <- (n_test - sum(diag(confMat_LR))) / n_test
-error_LR
+sprintf("Error for QDA: %f", error_LR)
 
+# Test accuracy
+acc_test_LR <- sum(diag(confMat_LR)) / n_test
+sprintf("Accuracy for QDA: %f", acc_test_LR)
+```
+
+
+```{r lr_measures, fig.align='center', out.width="70%"}
 # Plot
 ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
   geom_point(aes(y = post_prob_LR[,"Yes"], color = Churn)) +
@@ -843,15 +914,14 @@ ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 ```
 
+To conclude, the model's accuracy is $81.6631$% so it can correctly predict both retainment and churn. The *sensitivity* is high, showing case the model is very good at identifying customers who will stay with the company services. However, this model tend to predict wrongly those clients which will leave (*specificity*). Finally, we can observed that the most important errors achieved to $168$ wrong points classification.
+
 
 ## Incorporing economic impact
 
 From all models compute, I choose as the best one the one with lowest error and highest accuracy. This models is the Logistic Regression classifier. Also, if we take a look at the ROC curves, we can also conclude that it is better to use also the Logistic regression classifier.
 
 ```{r}
-# Specific library
-library(pROC)
-
 # Calculate ROC objects for each model
 roc_LDA <- roc(response = testing_transf$Churn,
                predictor = post_prob_LDA[,"Yes"],
@@ -918,7 +988,7 @@ fig <- plot_ly() %>%
             line = list(color = 'darkorange')) %>%
   add_trace(x = 1 - roc_QDA$specificities, y = roc_QDA$sensitivities, type = 'scatter', mode = 'lines',
             name = paste("QDA - AUC:", round(auc(roc_QDA), 3)),
-            line = list(color = 'deepskyblue4')) %>%
+            line = list(color = 'deepskyblue2')) %>%
   add_trace(x = 1 - roc_NB$specificities, y = roc_NB$sensitivities, type = 'scatter', mode = 'lines',
             name = paste("Naïve Bayes - AUC:", round(auc(roc_NB), 3)),
             line = list(color = 'chartreuse4')) %>%
@@ -1105,6 +1175,7 @@ As we can observed the profit of the company increase but we create a worse mode
 # Sin balanceo, con log-transformation: 58.85% (with caret)
 ```
 
+\pagebreak
 # References
 
 ```{r eval=FALSE, echo=FALSE}
@@ -1114,6 +1185,7 @@ As we can observed the profit of the company increase but we create a worse mode
 
 <div id="refs"></div>
 
+\pagebreak
 # Annex: fixing unbalanced dataset {#annex}
 
 In my specif situation, the method that has more sense is to downsampling. So I do not need to "make up" values. Downsampling, consist on reduce the majority class.
@@ -1123,22 +1195,23 @@ There are other manners to solve this issue as a hybrid method named **smote**. 
 
 For all this models, we configure a common train control parameter.
 
-```{r}
+```{r eval=FALSE}
 # Now, it is time to solve the umblance of my dataset
 # Using Synthetic Minority Oversampling Technique to produce more samples where customers churn out
 
 # Set up train control -> 5 repeats of 10-fold cross validation
+# Resolve class imbalances -> sampling = "down"
 train_ctrl_balanced <- trainControl(method = "repeatedcv",
                                     repeats = 5,
                                     number = 10,
-                                    sampling = "down") # Resolve class imbalances
+                                    sampling = "down")
 
 ```
 
 
 ## QDA
 
-```{r}
+```{r eval=FALSE}
 # Train the QDA model using caret
 model_QDA_b <- train(Churn ~ .,    
                     data = training_transf,
@@ -1166,7 +1239,7 @@ error_QDA_b
 
 ## LDA
 
-```{r}
+```{r eval=FALSE}
 # Ensure the correct train control is used for the balanced LDA model
 model_LDA_b <- train(Churn ~ .,    
                     data = training_transf,
@@ -1192,9 +1265,9 @@ error_LDA_b
 ```
 
 
-### Naïve Bayes
+## Naïve Bayes
 
-```{r}
+```{r eval=FALSE}
 # Train Naive Bayes model
 model_NB <- train(x = X_train, 
                   y = y_train, 
@@ -1223,22 +1296,12 @@ addmargins(confMat_NB)
 # Error of the model
 error_NB <- (n_test - sum(diag(confMat_NB))) / n_test
 error_NB
-
-# Plot
-ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
-  geom_point(aes(y = post_prob_NB[,"Yes"], color = Churn)) +
-  theme_light(base_size = 14) +
-  scale_color_manual(values = c("No" = "deepskyblue2", "Yes" = "firebrick2")) +
-  xlab("Individual") +
-  ylab("Probability of Churn with Naïve Bayes") +
-  geom_hline(yintercept = 0.5, linetype = "dashed")
 ```
 
-### Shrinkage classification
 
 ## Logistic regression
 
-```{r}
+```{r eval=FALSE}
 model_LR <- train(Churn ~.,
                   data = training_transf,
                   method = "glm",
@@ -1266,13 +1329,4 @@ addmargins(confMat_LR)
 # Error of the model
 error_LR <- (n_test - sum(diag(confMat_LR))) / n_test
 error_LR
-
-# Plot
-ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
-  geom_point(aes(y = post_prob_LR[,"Yes"], color = Churn)) +
-  theme_light(base_size = 14) +
-  scale_color_manual(values = c("No" = "deepskyblue2", "Yes" = "firebrick2")) +
-  xlab("Individual") +
-  ylab("Probability of Churn with Logistic regression") +
-  geom_hline(yintercept = 0.5, linetype = "dashed")
 ```
