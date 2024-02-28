@@ -110,19 +110,18 @@ library(skimr) # Summary statistics
 library(tidyverse) # Include ggplot2, dplyr, among others
 library(mice) # Imputation missing data
 library(VIM) # Imputation graph
-library(caret) # Statistical models
-library(GGally) # For plots of the continuous variables
+library(caret) # Models
+library(GGally) # Plots of the continuous variables
 library(pander) # For making tables
 library(gridExtra) # For grid.arrange
 library(reshape2) # Data reshaping (melt)
-library(corrplot) # For correlation matrix
+library(corrplot) # Correlation matrix
 library(patchwork)
-library(tidyr)
 library(knitr)
 library(psych) # Compute the correlation matrix
 library(polycor) # Compute the correlation heatmap
-library(corrplot) # Visualize the correlation matrix
-library(pROC)
+library(pROC) # ROC curve analysis
+library(plotly) # Interactive plot
 ```
 
 **Load dataset**. Import the dataset.
@@ -777,11 +776,11 @@ addmargins(confMat_LDA)
 sprintf("------ Testing measures ------")
 # Error of the model
 error_LDA <- (n_test - sum(diag(confMat_LDA))) / n_test
-sprintf("Error for QDA: %f", error_LDA)
+sprintf("Error for LDA: %f", error_LDA)
 
 # Test accuracy
 acc_test_LDA <- sum(diag(confMat_LDA)) / n_test
-sprintf("Accuracy for QDA: %f", acc_test_LDA)
+sprintf("Accuracy for LDA: %f", acc_test_LDA)
 ```
 
 
@@ -838,11 +837,11 @@ addmargins(confMat_NB)
 sprintf("------ Testing measures ------")
 # Error of the model
 error_NB <- (n_test - sum(diag(confMat_NB))) / n_test
-sprintf("Error for QDA: %f", error_NB)
+sprintf("Error for Naïve Bayes: %f", error_NB)
 
 # Test accuracy
 acc_test_NB <- sum(diag(confMat_NB)) / n_test
-sprintf("Accuracy for QDA: %f", acc_test_NB)
+sprintf("Accuracy for Naïve Bayes: %f", acc_test_NB)
 ```
 
 
@@ -895,11 +894,11 @@ addmargins(confMat_LR)
 sprintf("------ Testing measures ------")
 # Error of the model
 error_LR <- (n_test - sum(diag(confMat_LR))) / n_test
-sprintf("Error for QDA: %f", error_LR)
+sprintf("Error for Logistic regression: %f", error_LR)
 
 # Test accuracy
 acc_test_LR <- sum(diag(confMat_LR)) / n_test
-sprintf("Accuracy for QDA: %f", acc_test_LR)
+sprintf("Accuracy for Logistic regression: %f", acc_test_LR)
 ```
 
 
@@ -919,10 +918,10 @@ To conclude, the model's accuracy is $81.6631$% so it can correctly predict both
 
 ## Incorporing economic impact
 
-From all models compute, I choose as the best one the one with lowest error and highest accuracy. This models is the Logistic Regression classifier. Also, if we take a look at the ROC curves, we can also conclude that it is better to use also the Logistic regression classifier.
+For incorporating the economic impact that can be cause by the remain or left of a customer on a Telco company, I will compute the cost for the best accuracy model: **Logistic regression classifier**. Notice it presents the minor average errors and highest accuracy (see the chart below).
 
-```{r}
-# Calculate ROC objects for each model
+```{r roc_curves_plot, echo=FALSE}
+# Calculate ROC for each model
 roc_LDA <- roc(response = testing_transf$Churn,
                predictor = post_prob_LDA[,"Yes"],
                levels = c("No", "Yes"))
@@ -936,7 +935,7 @@ roc_LR <- roc(response = testing_transf$Churn,
               predictor = post_prob_LR[,"Yes"], 
               levels = c("No", "Yes"))
 
-# Create a data frame for ggplot2
+# Create a df for ggplot2
 roc_data <- data.frame(
   Specificity = c(1 - roc_LDA$specificities,
                   1 - roc_QDA$specificities,
@@ -951,36 +950,6 @@ roc_data <- data.frame(
 )
 
 # Plot ROC curves
-ggplot(roc_data, 
-       aes(x=Specificity, y=Sensitivity, color=Model)) +
-  geom_line() +
-  geom_abline(linetype="dashed", color="gray") +  # Add a diagonal dashed line
-  scale_color_manual(values=c("darkorange",
-                              "deepskyblue4", 
-                              "chartreuse4",
-                              "purple")) +
-  labs(title="ROC Curves Comparison", x="1 - Specificity", y="Sensitivity") +
-  theme_minimal() +
-  theme(legend.title=element_blank(), legend.position="bottom") +
-  annotate("text", x=0.75, y=0.25,
-           label=paste("AUC LDA:", round(auc(roc_LDA), 3)), 
-           color="darkorange") +
-  annotate("text", x=0.75, y=0.20,
-           label=paste("AUC QDA:", round(auc(roc_QDA), 3)), 
-           color="deepskyblue4") +
-  annotate("text", x=0.75, y=0.15, 
-           label=paste("AUC NB:", round(auc(roc_NB), 3)),
-           color="chartreuse4") +
-  annotate("text", x=0.75, y=0.10, 
-           label=paste("AUC LR:", round(auc(roc_LR), 3)), 
-           color="purple")
-```
-
-```{r}
-## Some pruebas --------------------------------------------------------------
-library(plotly)
-library(pROC)
-
 fig <- plot_ly() %>%
   add_trace(x = 1 - roc_LDA$specificities, 
             y = roc_LDA$sensitivities, type = 'scatter', mode = 'lines',
@@ -988,7 +957,7 @@ fig <- plot_ly() %>%
             line = list(color = 'darkorange')) %>%
   add_trace(x = 1 - roc_QDA$specificities, y = roc_QDA$sensitivities, type = 'scatter', mode = 'lines',
             name = paste("QDA - AUC:", round(auc(roc_QDA), 3)),
-            line = list(color = 'deepskyblue2')) %>%
+            line = list(color = 'blue')) %>%
   add_trace(x = 1 - roc_NB$specificities, y = roc_NB$sensitivities, type = 'scatter', mode = 'lines',
             name = paste("Naïve Bayes - AUC:", round(auc(roc_NB), 3)),
             line = list(color = 'chartreuse4')) %>%
@@ -998,84 +967,72 @@ fig <- plot_ly() %>%
   layout(title = "ROC Curves Comparison",
          xaxis = list(title = "1 - Specificity", zeroline = FALSE),
          yaxis = list(title = "Sensitivity", zeroline = FALSE),
-         legend = list(x = 0.1, y = 0.9))
+         legend = list(x = 1, y = 0, xanchor = 'right', yanchor = 'bottom'))
 
 fig # Print the plot
 ```
 
 
+**Recall** (`Churn`); Yes = the customer left the company, and No = the customer remained with the company.
 
-**Recall**. `Churn`: Yes = the customer left the company and No = the customer remained with the company.
+When a model makes wrong prediction, we must take into account that not all errors carry the same financial consequences. For instance, if the model predicts that a customer will stay (when they actually leave) this can turn into a loss of the expected revenue from that customer. On the other hand, mistakenly predicting a client will leave (and they actually stay) does not have a huge influence on the company, but it might lead into a loss of an opportunity.
 
-On the previous models, we have assume all wrong prediction that makes the model have the same consequences for the company. However, this is not true. For instance, there are wrong prediction that can caused losses on the company. Imagine the model predict that a customer is going to still having the services (Churn=No) for the next period of time with this company, but it reality this client will leave (Churn=Yes) and canceld all the subscriptions with this company. It is clearly, that we will earn less money that we expected.
-On the other hand, if the model predict that a client will leave but in reality he never though about leaving, thereby he will stay with this company. This will no suposse any problem or loss on the company's accounts.
-
-If we take a look on the confusion matric of the logistic regression classifier:
-
-| predictions_LR    |  No   | Yes   |
-|-------------------|------:|------:|
-| No                |  944  |  168  |
-| Yes               |  90   |  205  |
+Thus, it is important to understand correctly the confusion matrix for the chosen model (*logistic regression classifier*). Worst error in the below table is the one committed $168$ times. Then, the goal is to decreasing this error by changing the probability threshold. The optimal threshold can be selected using some specific economic effects.
 
 
-Note: row (model's predictions) columns (actual/real value).
+```{r prev_lr_matrix, echo=FALSE}
+# Performance measures -> without using caret
+confMat_LR <- table(predictions_LR, testing_transf$Churn)
+confMat_LR
+```
 
-Worst error in the table is the one with committed 168 times with this model. Now, the goal is to decreasing this error by changing the probability threshold. And we can select the optimal threshold using some specific economic effects.
+**Economic assumption used**.
 
-**Assumption used for doing this exercise**:
-- If the company predicts a customer is going to stay and it actually stay, the company gains a 12% profil at the end of the quarter.
-- If the company predicts a customer is going to stay but he leaves, then the loss is 100%.
-- If the company predict a customer is going to leave but he actually stay, then the profit is 10%.
-- If the company predict a customer is going to leave and he actually leave, then the profit is 0%.
+- If the company predicts a customer is going to stay and it actually stay, the company gains a 12% profit at the end of the quarter.
 
-Table of profits:
+- If the company predicts a customer is going to stay but he leaves, the loss is 100%.
 
-| Prediction/Actual |  Stay | Leave |
-|-------------------|------:|------:|
-| Stay              | 0.20  | -1.0  |
-| Leave             | -0.01 | 0.03  |
+- If the company predict a customer is going to leave but he actually stay, the profit is 10%.
 
-For instance, a naive manager would incur a profit per applicant of $0.12\times0.93 - 1.0\times0.07 - 0.01\times0.0 + 0.0\times0.0 = 0.0416$
+- If the company predict a customer is going to leave and he actually leave, then the profit is 3%.
 
-```{r}
+Using the specified profits and losses for each prediction outcome, we compute the average profit per customer based on the model's predictions.
+
+```{r economic_formula}
 # Confusion matrix values
 TN = 944
 FP = 168
 FN = 90
 TP = 205
 
-# Profit/loss percentages
+# profit/loss in %
 profit_TN = 0.20
 loss_FP = -1.0
 profit_FN = -0.01
 profit_TP = 0.03
 
-# Compute profit per applicant
-profit_per_applicant = (TN * profit_TN + FP * loss_FP + FN * profit_FN + TP * profit_TP) / (TN + FP + FN + TP)
-profit_per_applicant
+# Compute profit per client
+profit_per_client = (TN * profit_TN + FP * loss_FP + FN * profit_FN + TP * profit_TP) / (TN + FP + FN + TP)
+sprintf("Profit per customer: %f", profit_per_client)
 ```
 
+The  goal is to improve this economic output by reducing the most costly mistakes (costumers that are predicted to stay but actually change into another company).
 
-This is the profit we should improve
-
-Profit table as a vector:
 
 ```{r hyper-tuning_model_economic}
-profit.unit <- c(0.20, -0.01, -1.0, 0.03)
+profit_unit <- c(0.20, -0.01, -1.0, 0.03)
 
-## Selecting the optimal threshold to give the loan
-profit.i = matrix(NA, nrow = 50, ncol = 10)
+## Selecting the optimal threshold
+profit_i = matrix(NA, nrow = 50, ncol = 10)
 # 100 replicates for training/testing sets for each of the 10 values of threshold
  
-p0=0.73
-p1=1-p0
+p0 <- 0.73
+p1 <- 1-p0
 
 j <- 0
 
 # This is for doing hyper-parameter
 for (threshold in seq(0.05,0.5,0.05)){
-  #for (p1 in c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9)){
-  
   j <- j + 1
   cat(j)
   for(i in 1:50){
@@ -1084,44 +1041,40 @@ for (threshold in seq(0.05,0.5,0.05)){
     d <- createDataPartition(training_transf$Churn, p = 0.4, list = FALSE)
     # select training sample
     
-    train<-training_transf[d,]
-    test <-training_transf[-d,]  
+    train <- training_transf[d,]
+    test <- training_transf[-d,]  
     
-    #p1=1-p0
     # Fit logistic regression model
-    full.model <- glm(Churn ~ ., data = training_transf, family = "binomial")
+    full_model <- glm(Churn ~ ., data = training_transf, family = "binomial")
     
     # Obtain predicted probabilities on test set
-    probabilities <- predict(full.model, testing_transf, type = "response")
+    probabilities <- predict(full_model, test, type = "response")
 
     # Convert probabilities to predicted classes based on threshold
     Churn_pred <- ifelse(probabilities > threshold, "Yes", "No")
     
     # Create confusion matrix
-    CM <- table(Churn_pred, testing_transf$Churn)
+    CM <- table(Churn_pred, test$Churn)
 
     # Calculate profit per applicant
-    profit.applicant <- sum(profit.unit*CM)/sum(CM)
-    profit.i[i,j] <- profit.applicant
+    profit.applicant <- sum(profit_unit*CM)/sum(CM)
+    profit_i[i,j] <- profit.applicant
     
   }
 }
 
-boxplot(profit.i, main = "Hyper-parameter selection",
+boxplot(profit_i, main = "Hyper-parameter selection",
         ylab = "unit profit",
         xlab = "threshold", names = seq(0.05,0.5,0.05),col="royalblue2")
-
-# Storage all profits computed
-all_profits_comp <- apply(profit.i, 2, median)
-all_profits_comp
-
-# Find the best threshold
-best_threshold <- all_profits_comp[which.max(all_profits_comp)]
-best_threshold
 ```
+
+The width of the boxes on the boxplot represent the variability of the unit profit across the different tries of the hyper-parameter tuning. A smaller width means a more reliable model's performance. Therefore, in this situation, for the Telco company, the optimal threshold is $0.05$.
+
+Finally, once we have computed the optimal threshold we can use it in order to train our model and make predictions over the test set. This will turn into a worst accuracy model but our economic profit will increased.
 
 ```{r model_economic}
 ## Final prediction for testing set using the optimal hyper-parameter:
+best_threshold <- 0.05
 # Fit the logistic regression model using the training data
 final_model <- train(Churn ~ .,
                      data = training_transf, 
@@ -1141,63 +1094,52 @@ confusionMatrix(factor(final_predictions), testing_transf$Churn)
 CM <- confusionMatrix(factor(final_predictions), testing_transf$Churn)$table
 
 
-profit.applicant <- sum(profit.unit*CM)/sum(CM)
-profit.applicant
+profit.applicant <- sum(profit_unit*CM)/sum(CM)
+sprintf("Profit per customer (with optimal threshold): %f", profit.applicant)
 ```
 
-As we can observed the profit of the company increase but we create a worse model. However, due to the importance of obtaining benefits, this model even though it make more mistakes it is much beneficial to the company.
+As our initial though the profit of the company increase but we create a worse model regarding to the accuracy. However, due to the importance of obtaining benefits, this model even though it makes more mistakes it is much beneficial for the business. We have been able to decrease to $6$ the worst errors.
 
 
 \pagebreak
 # Conclusion
 
+This project is focus on analyzing customer churn for a telecommunications company, the dataset contains $21$ variables such as gender, total charges, and subscription services, among others. The first step is based on cleaning and manipulated the data, which included deleting variables due to its low influence and some transformations in order to approach a normal distribution.
+
+The statistical models assessed included Quadratic Discriminant Analysis (QDA), Linear Discriminant Analysis (LDA), Naïve Bayes (NB), and Logistic Regression (LR). Among all models, the *logistic regression classifier* has demonstrated to be the most accurate techinque, reaching an accuracy of $81.66$%. This good performance can be explained thanks to the model's capacity to handle binary outcomes and its robustness to small sample sizes, making it a robust tool for this dataset.
+
+Last part of the project include the economic impact of our model based on the prediction errors, demonstrating that not all errors hold the same consequences for the company point of view. For instance, the "worst" mistake is predicting the client will stay having the company services but they actually cancel them. By incorporating the economic impact into the model evaluation, it became clear that a slightly less accurate model could yield higher profits by minimizing those "worst" and costly mistakes.
+
+In conclusion, the project demonstrate the importance of selecting the right model not only based on the statistical accuracy also by understanding the economic impact. The right decision will lead us into a model less accurate which maximize our profit. And it can be done easly by adjusting the threshold for predicting churn to find the balance of these two situation.
+
 ```{r}
-############ Summary ERRORS ############
+############ Summary ACCURACY ############
 ## QDA -----------------------------------------------
-# Sin balanceo, sin log-transformation: 23.52523%
-# Sin balanceo, con log-transformation: 22.95665%
-# Con balanceo, con log-transformation: 25.65743% (up)
+# Accuracy: 0.770434 and Worst error: 86
 ## LDA -----------------------------------------------
-# Sin balanceo, sin log-transformation: 18.8344%
-# Sin balanceo, con log-transformation: 18.69225%
-# Con balanceo, con log-transformation: 24.37811%
+# Accuracy: 0.813077 and Worst error: 163
 ## NB ------------------------------------------------
-# Sin balanceo, sin log-transformation: 22.10377%
-# Sin balanceo, sin log-transformation: 21.39% (with caret)
-# Sin balanceo, con log-transformation: 21.03767%
-
-## Shrinkage -----------------------------------------
-
+# Accuracy: 0.7896 and Worst error: 108
 ## LR ------------------------------------------------
-# Sin balanceo, sin log-transformation: 19.62% (with caret)
-# Sin balanceo, con log-transformation: 18.33689%
+# Accuracy: 0.8166 and Worst error: 168
 ## Incorporing economic impact -----------------------
-# Sin balanceo, con log-transformation: 58.85% (with caret)
+# Accuracy: 0.5281 and Worst error: 6
 ```
 
 \pagebreak
 # References
-
-```{r eval=FALSE, echo=FALSE}
-# Returns the names of all packages loaded in the current R session
-# knitr::write_bib(.packages(), "references.bib")
-```
 
 <div id="refs"></div>
 
 \pagebreak
 # Annex: fixing unbalanced dataset {#annex}
 
-In my specif situation, the method that has more sense is to downsampling. So I do not need to "make up" values. Downsampling, consist on reduce the majority class.
-
-There are other manners to solve this issue as a hybrid method named **smote**. This technique down-sample the majority class and synthesize new data points in the minority class. This procedure we will be implemented on the following section and it will be establishes as a common configuration for all statistical tools.
-
+This section contains the code related for balancing the dataset. The most promising method is downsampling. This approach avoids the need to "make up" values by reducing the majority class.
 
 For all this models, we configure a common train control parameter.
 
 ```{r eval=FALSE}
-# Now, it is time to solve the umblance of my dataset
-# Using Synthetic Minority Oversampling Technique to produce more samples where customers churn out
+# Solve the unbalanced of my dataset
 
 # Set up train control -> 5 repeats of 10-fold cross validation
 # Resolve class imbalances -> sampling = "down"
@@ -1269,64 +1211,78 @@ error_LDA_b
 
 ```{r eval=FALSE}
 # Train Naive Bayes model
-model_NB <- train(x = X_train, 
+model_NB_b <- train(x = X_train, 
                   y = y_train, 
                   method = "naive_bayes", 
-                  trControl = train_ctrl,
+                  trControl = train_ctrl_balanced,
                   tuneLength = data.frame(laplace = 0.5,
                                       usekernel = FALSE,
                                       adjust = FALSE))
 
 
 # Predict on test data
-predictions_NB <- predict(model_NB, newdata = X_test)
-head(predictions_NB)
+predictions_NB_b <- predict(model_NB_b, newdata = X_test)
+head(predictions_NB_b)
 
 # Posterior probabilities
-post_prob_NB <- predict(model_NB, X_test, type = "prob")
-head(post_prob_NB)
+post_prob_NB_b <- predict(model_NB_b, X_test, type = "prob")
+head(post_prob_NB_b)
 
 # Evaluate the model using confusion matrix
-confusionMatrix(predictions_NB, y_test)
+confusionMatrix(predictions_NB_b, y_test)
 
 # Performance measures -> withou using caret
-confMat_NB <- table(predictions_NB, testing_transf$Churn)
-addmargins(confMat_NB)
+confMat_NB_b <- table(predictions_NB_b, testing_transf$Churn)
+addmargins(confMat_NB_b)
 
 # Error of the model
-error_NB <- (n_test - sum(diag(confMat_NB))) / n_test
-error_NB
+error_NB_b <- (n_test - sum(diag(confMat_NB_b))) / n_test
+error_NB_b
 ```
 
 
 ## Logistic regression
 
 ```{r eval=FALSE}
-model_LR <- train(Churn ~.,
+model_LR_b <- train(Churn ~.,
                   data = training_transf,
                   method = "glm",
                   family = "binomial", # For binary logistic regression
-                  trControl = train_ctrl)
+                  trControl = train_ctrl_balanced)
 
 # Print the model summary
-print(model_LR)
+print(model_LR_b)
 
 # Predict on test data
-predictions_LR <- predict(model_LR, X_test)
-head(predictions_LR)
+predictions_LR_b <- predict(model_LR_b, X_test)
+head(predictions_LR_b)
 
 # Posterior probabilities
-post_prob_LR <- predict(model_LR, X_test, type = "prob")
-head(post_prob_LR)
+post_prob_LR_b <- predict(model_LR_b, X_test, type = "prob")
+head(post_prob_LR_b)
 
 # Evaluate the model using confusion matrix
-confusionMatrix(predictions_LR, y_test)
+confusionMatrix(predictions_LR_b, y_test)
 
 # Performance measures -> without using caret
-confMat_LR <- table(predictions_LR, testing_transf$Churn)
-addmargins(confMat_LR)
+confMat_LR_b <- table(predictions_LR_b, testing_transf$Churn)
+addmargins(confMat_LR_b)
 
 # Error of the model
-error_LR <- (n_test - sum(diag(confMat_LR))) / n_test
-error_LR
+error_LR_b <- (n_test - sum(diag(confMat_LR_b))) / n_test
+error_LR_b
+```
+
+**Comparative balanced models**
+
+```{r}
+############ Summary ACCURACY ############
+## QDA -----------------------------------------------
+# Accuracy: 0.7349524
+## LDA -----------------------------------------------
+# Accuracy: 0.7404545
+## NB ------------------------------------------------
+# Accuracy: 0.7896
+## LR ------------------------------------------------
+# Accuracy: 0.7455974
 ```
