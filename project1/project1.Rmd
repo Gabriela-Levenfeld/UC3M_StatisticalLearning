@@ -4,23 +4,16 @@ author: "Gabriela Levenfeld Sabau"
 date: "`r Sys.Date()`"
 output:
   html_document:
-    toc: true
-    toc_depth: '6'
-    df_print: paged
+    number_sections: yes   
+    toc: TRUE              
+    toc_float: TRUE
   geometry: left=3cm,right=3cm,top=2cm,bottom=2cm
   mathjax: local
   self_contained: false
-  word_document:
-    toc: true
-    toc_depth: '6'
-  pdf_document:
-    latex_engine: xelatex
-    toc: true
-    toc_depth: 6
-    keep_tex: true
 subtitle: MS in Statistics for Data Science
 bibliography: references.bib
 biblio-style: ieee
+citation_package: natbib
 nocite: '@*'
 link-citations: true
 linkcolor: blue
@@ -36,9 +29,9 @@ knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE)
 
 ## Dataset description
 
-The dataset used for develop this task is available on Kaggle [@kaggle_telco_churn] and contains information of a Telco company from $7043$ clients, distributed across $21$ different variables such as `gender`, `MonthlyCharges`, and `PhoneService`, among others.
+The dataset used for developed this task is available on Kaggle [@kaggle_telco_churn] and it contains information of a Telco company from $7043$ clients, distributed across $21$ different variables including `gender`, `MonthlyCharges`, and `PhoneService`, among others.
 
-In business sector, knowing the number of customers gained and lost is crucial for making profit. Thus, analyzing if a client is thinking about changing its services into another company can help to evaluate and make new company's strategies. This dataset is designed in order to predict customer churn, where it has been collect the final decision for each client.
+In the business sector, undertanding the number of customers gained and lost is crucial for maximazing profitability. Thus, analyzing if a client is thinking about changing its services into another company can help to evaluate and create new company's strategies. This dataset is designed in order to predict customer churn, storagint the final decision of each client.
 
 
 ## Variables description
@@ -59,7 +52,7 @@ The information contained in the dataset can be group into different areas:
 
 **Services subscribed**.
 
--   `tenure`; The number of moths the customer has been with the company by the end of the third quarter (3Q).
+-   `tenure`; The number of months the customer has been with the company by the end of the third quarter (3Q).
 
 -   `PhoneService`; Whether the customer subscribes to home phone service (Yes or No).
 
@@ -107,45 +100,47 @@ This valuable information can provide insights to the company, that allow it to 
 
 # Data preprocessing
 
-In this first section, we must prepare the dataset in order to use it for the computational model. This means handling missing data, deleting unnecessary information, encoding categorical variables and splitting the data, among other.
+This section focuses on preparing the dataset for exploratory data analysis (EDA) and applying the computational models. This include loading the necessary material, handling missing values, encoding categorical variables, and splitting the dataset into training and testing subsets, among other tasks.
 
-## 1. Load material.
+
+## Load material.
 
 **Load libraries**. Several libraries are need for the project in order to work properly.
 
 ```{r load_libraries, message=FALSE, warning=FALSE}
-library(skimr)
-library(tidyverse) # For glimpse
-library(dplyr) # mutate function
-library(mice) # Imputation
+library(skimr) # Summary statistics
+library(tidyverse) # Include ggplot2, dplyr, among others
+library(mice) # Imputation missing data
 library(VIM) # Imputation graph
-library(fastDummies) # For encoding multi-state variables
-library(caret) # For split the dataset
-library(ggplot2) # Plots
+library(caret) # Statistical models
 library(GGally) # For plots of the continuous variables
 library(pander) # For making tables
 library(gridExtra) # For grid.arrange
-library(reshape2) # For melt function
+library(reshape2) # Data reshaping (melt)
 library(corrplot) # For correlation matrix
-library(MASS) # For qda and lda
+library(patchwork)
+library(tidyr)
+library(knitr)
+library(psych) # Compute the correlation matrix
+library(polycor) # Compute the correlation heatmap
+library(corrplot) # Visualize the correlation matrix
 ```
 
-**Load dataset**.
+**Load dataset**. Import the dataset.
 
 ```{r load_data}
-# Load the dataset for this project
 data <- read.csv("Telco-Customer-Churn.csv", header = TRUE, sep = ",")
 ```
 
-**First look at the dataset**.
+**First look at the dataset**. Brief overview of the dataset for further preprocessing steps.
 
 ```{r small_EDA1, eval=FALSE, include=FALSE}
 # Small Exploratory Data Analysis
-#skim(data)
+# skim(data)
 # Presents results for every column; the statistics it provides depend on the class of the variable
 
-# For visualize the first 2 rows
-#head(data, 2)
+# For visualizing the first 2 rows
+# head(data, 2)
 ```
 
 ```{r small_EDA2}
@@ -153,50 +148,44 @@ glimpse(data)
 ```
 
 
-## 2. Delete unnecessary information.
+## Delete unnecessary information.
 
-Thanks to the above function, we realized we can remove the ID column (`customerID`) because it will not be useful for making predictions. On the other hand, `PaperlessBilling` is also removed, due to nowadays we live in a digital era thus most people choose electronic payments and it will not really provide any additional information to the problem we are dealing with.
+Some variables are removed due to its usefulness contribution on the model for making predictions. For instance, `customerID` is just the unique identifier for each customer. On the other hand, `PaperlessBilling` parameter, nowadays does not have too much sense. The main reason is that with the digital era we live in, most customers choose for internet payments. Thus this columns are exclude from the analsys.
 
 ```{r rmv_columns}
-# Remove ID column 
+# Remove unnecessary variables
 data <- data %>% dplyr::select(-c(customerID, PaperlessBilling))
 ```
 
-## 3. Data cleaning.
+## Data cleaning.
 
-By analyzing the dataset we can realized that there exists some variables that are quite intertwine.
+By analyzing the dataset, we can realized that certain variables are closely related, therefore some modification are apply.
 
-\underline{Combine `PhoneService` and `MultipleLines`}. The first variable indicates if the client has sign up for home phone service or not. Only when the client has hired for this service, he can choose between having $1$ phone line (`MultipleLines`=No) or have more than $1$ (`MultipleLines`=Yes). This relationship lead us into three possible scenarios:
+<u>Combine `PhoneService` and `MultipleLines`</u>. The first variable indicates if the client has subscribed to home phone service or not. Only when the client has hired this service, he can choose between having $1$ phone line (`MultipleLines`=No) or have more than $1$ (`MultipleLines`=Yes). This relationship lead us into three possible scenarios:
 
-1.  `PhoneService`=No and `MultipleLines`="No phone service". Customers who do not have phone service.
+1. **No phone service**. Customers who have not subscribed to phone service (`PhoneService`=No and `MultipleLines`="No phone service").
 
-2.  `PhoneService`=Yes and `MultipleLines`=No. Customers who have phone service and choose to have a single line.
+2. **Single phone line**. Customers with phone service and a single line (`PhoneService`=Yes and `MultipleLines`=No).
 
-3.  `PhoneService`=Yes and `MultipleLines`=Yes. Customers who have phone service and choose to have multiple lines.
+3. **Multiple phone lines**. Customers with phone service and multiple lines (`PhoneService`=Yes and `MultipleLines`=Yes).
 
-Since `MultipleLines` can be consider to have all the information needed, I will combine this two variables on a new parameter named `PhoneServiceType` and treat it as a multi-state category with three options:
+To simplify this, it is introduced a new variable (`PhoneServiceType`) with three categories corresponding to the above scenarios:
 
--   $0$: if there is no phone service.
+- `NoPhone`: if there is no phone service.
 
--   $1$: if there is phone service with a single line.
+- `PhoneSingle`: if there is phone service with a single line.
 
--   $2$: if there is phone service with multiple lines.
+- `PhoneMultiple`: if there is phone service with multiple lines.
 
-\underline{`InternetService` and its associate variables}. Something similar happend on this situation. Clients who have no sign up for Internet service, they are no be able to sign up for extra-services associated with it such as `OnlineSecurity`, `StreamingTV`, among others. The dataset storage this information of extra-services with "Yes", "No" or "No internet service". It is clearly that we can reduce this multi-state variables issue into a binary class. So "No phone service" will be understand simply as the customer does not have this service on (setting the parameter value into "No").
+<u>`InternetService` and its associate variables</u>.
+A similar situation happens with `InternetService` and its related services (`OnlineSecurity`, `StreamingTV`, among others). Clients without internet service cannot sign up to these additional services, which are denoted as "Yes", "No", or "No internet service" in the dataset. We can simplify this by considering "No internet service" as equivalent to "No", thereby converting these variables into binary classes.
 
-**Note**: For both situation, we check there was no mistake on the data. So it has been computationally verified that there is concordance between the relationships of these variables. Thus avoiding the existence of possible nonsense situations.
+**Note**. For both situation, it has been computationally verified that there is consistency between the relationships of these variables. Thus avoiding the existence of possible nonsense situations.
 
 ```{r data_cleaning, echo=TRUE, results='hide'}
 ## Unique values of each variable ----------------------------------------------
-unique(data$SeniorCitizen) # It is already transform in 1's and 0's
-data$SeniorCitizen <- factor(data$SeniorCitizen, 
-                             levels = c(0, 1), 
-                             labels = c("No", "Yes"))
-unique(data$SeniorCitizen)
-
-
 cat_vars <- sapply(data, is.character) # Select qualitative variables
-lapply(data[, cat_vars], unique) # Print unique values
+lapply(data[, cat_vars], unique) # Print each unique values
 
 
 ## PhoneService and MultipleLines ----------------------------------------------
@@ -239,31 +228,27 @@ for (variable in vars_to_check) {
   cat("\n")
 }
 
-# Reduce the associate variables to a binary class ("No internet service" -> "No")
+# Reduce to a binary variable ("No internet service" -> "No")
 for (variable in vars_to_check) {
   data[[variable]] <- ifelse(data[[variable]] == "No internet service", "No", data[[variable]])
 }
 ```
 
-## 4. Handling missing data.
+## Handling missing data.
 
-On this dataset there are some missing values contained in the variable `TotalCharges` which we need to handle it first in order to be able to use the statistical tools after.
+In the dataset, a small observation of the variable `TotalCharges` contains missing values, only the $0.156$% of the customers. To handle these missing values, we have several options:
 
-Take in mind, these values represent only $0.1561834\%$ of customers in the dataset, the following approach could be followed:
+- **Delete this rows**; Due to the low presence of missing values, deleting these observation will not affect significantly the dataset.
 
--   **Delete this rows**; due to the low presence of missing values the data will not be affected.
+- **Set NA's to $0$**; Since these observations correspond to new clients we can assume it has not passed enough time to compute this value and stablishing to zero can be a good approach.
 
--   **Set to** $0$; these observations correspond to new clients, therefore, note it has not passed enough time to compute this value.
+- **Imputation**; We can impute the missing data using techniques provided by the R library `mice` [@mice_ref]. By default, mice generates $5$ imputations. However, for this project, we will only consider the first imputation. We will use the 'pmm' method (predictive mean matching), which imputes data based on the mean as a reference. After generating the imputed data, we can complete the missing values using the `complete()` function, which fills in missing values with those from the first imputation.
 
--   **Imputation**; selected option thereby some techniques seen during lecture can be apply.
+To check there are no missing data anymore, we use a graph from the `library(VIM)` [@VIM_ref], which display the percentage of NA's.
 
-For imputing the missing data the R library call `mice` is used. Instead of making a random prediction, `mice` by default makes $5$. However, in this exercise we will only choose the first of the five. Additionally, the method we will use will be 'pmm', which stands for predictive mean matching. That is, the data will be imputed taking the mean as a reference. Once we have generated the imputed data, we have to introduce it in our data. The easiest way to do this is with the `complete()` function, which complete the missing values with the values of the first imputation of the five that we just made.
+Also, to assess whether the imputed data adequately reflects the distributions of the original data, we can use the `densityplot()` function. This function shows the marginal distribution of the observed data in blue, and in red, it shows the $5$ densities for the predictor with initially missing data.
 
-To check there is no missing data anymore, we use a graph from `library(VIM)` that represent the percentage of missing data.
-
-To check whether the imputed data adequately follows the distributions of the original data, we are going to use the `densityplot()` function, which shows us the marginal distribution of the observed data in blue; and in red, the $m=5$ densities for the predictor that has initially missing data which is `TotalCharges`. That is why, in the following graph, we observe $5$ functions in red, each corresponding to a repetition of the imputed data by `mice`.
-
-```{r counting_NAs, echo=TRUE, results='hide'}
+```{r counting_NAs, eval=FALSE, include=FALSE, results='hide'}
 # Counting NA's ----------------------------------------------------------------
 missing_values <- colSums(is.na(data)) # 11 NA's in TotalCharges variable
 percentage_na <- missing_values/nrow(data)*100 # NA's in %
@@ -284,8 +269,10 @@ mice_model <- mice(data,
   seed = 1234, print = FALSE
 )
 data <- complete(mice_model, 1) # Complete the data with the first imputation
+```
 
-par(mfrow = c(1, 2)) # Set up plotting area to have 1 row and 2 columns
+
+```{r plots_handling_NAs, echo=FALSE, fig.align='center', fig.height=3, fig.width=4}
 # Plot 1: Represent the % of missing data
 aggr(data,
   col = c("navyblue", "yellow"), numbers = TRUE, sortVars = FALSE,
@@ -295,37 +282,21 @@ aggr(data,
 
 # Plot 2: Check it follows the distribution of the original variable
 densityplot(mice_model, scales = list(x = list(relation = "free")))
-
-par(mfrow = c(1, 1)) # Reset par to default
 ```
 
-Due to it does not fit properly, as we can see on the density plot, I believe setting this observation to $0$ is the best option, among all.
+As we can observed on the density plot, the distribution does not fit as properly as it should be. Hence, setting this observation to $0$ or deleting them, might be a better option. However, due to the low presence of missing values on the dataset, we will continue the project with this imputation technique.
 
-```{r}
-# TODO: Establecer estas filas a cero (?) o dejo la imputation.
-print(data[489,]) # User with TotalCharges=NA, after imputation
-print(data[490,]) # Normal user
-```
 
-## 5. Encoding categorical variables.
+## Encoding categorical variables.
 
-**Categorical variables**.
+Once we have the dataset ready, the goal of this section is to get a dataset that our statistical models knows how to manage. This include, turn it into factor the categorical variables.
 
--   Binary variables. $11$: `gender`, `SeniorCitizen`, `Partner`, `Dependents`, `OnlineSecurity`, `OnlineBackup`, `DeviceProtection`, `TechSupport`, `StreamingTV`, `StreamingMovies` and `Churn`.
+**Binary variables**. There are a total of $11$ binary variables: `gender`, `SeniorCitizen`, `Partner`, `Dependents`, `OnlineSecurity`, `OnlineBackup`, `DeviceProtection`, `TechSupport`, `StreamingTV`, `StreamingMovies` and `Churn`. All this variables has been transformed into factor, with two possible outcomus "No" or "Yes".
 
-For these variables, I will establish "No" values as $0$ and "Yes" as $1$'s.
-
--   Multi-sate variables. $4$: `InternetService`, `Contract`, `PaymentMethod`, `PhoneServiceType`.
-
-On the other hand, to manage this section is a little bit more complicated and we need to be aware of the presence or absence of some natural order on it.
-
-Strategy 1: Natural order. `PhoneServiceType` preserve a natural order. As a consequence this parameter, will be encode preserving the order. It is worth to mention that `PhoneServiceType` is already encode. And the idea explained above has been apply, values set as $0$, $1$ and $2$.
-
-Strategy 2: No order. For the second set of categorical parameter (`InternetService`, `Contract` and `PaymentMethod`). I will create factors variables. This is because, for instance, on the `InternetService` parameter, "Fiber Optic" is not inherently greater than "DSL". Same happens with the rest of variables mention.
+**Multi-sate variables**. There are $4$ variables of this kind of data: `InternetService`, `Contract`, `PaymentMethod`, and `PhoneServiceType`. As well as before, I will create factor levels for each possible outcome. Notice that this starategy can be follow due to the absence of any kind of "natural order".
 
 ```{r encoding_categorical_vars, echo=TRUE, results='hide'}
 ## Binary encoding -------------------------------------------------------------
-
 binary_variables <- c(
   "Partner", "Dependents", "OnlineSecurity", "OnlineBackup",
   "DeviceProtection", "TechSupport", "StreamingTV", "StreamingMovies", "Churn"
@@ -337,8 +308,15 @@ for (var in binary_variables) {
 data$gender <- factor(data$gender)
 levels(data$gender) # Check the levels
 
+unique(data$SeniorCitizen) # It is already transform in 1's and 0's
+data$SeniorCitizen <- factor(data$SeniorCitizen, 
+                             levels = c(0, 1), 
+                             labels = c("No", "Yes"))
+levels(data$SeniorCitizen)
+
 ## Multi-state variables -------------------------------------------------------
-# Rename levels to avoid misunderstands later
+# Rename levels of all variables needed to avoid misunderstands later
+
 # InternetService to a factor and rename levels
 data$InternetService <- factor(data$InternetService,
                                levels = c("DSL", "Fiber optic", "No"),
@@ -367,7 +345,10 @@ data$PaymentMethod <- factor(data$PaymentMethod,
 levels(data$PaymentMethod) # Check the levels
 ```
 
-## 6. Split the dataset
+
+## Split the dataset
+
+Final step before applying the statistical tools consist on divide the dataset into two subsets. The training set, takes $80$% of the data and it is used to train the models. This subset allows the model to learn patterns and relationships within the data. On the other hand, testing set ($20$% of the data) is used by unseen data to evaluate the performance of the trained model.
 
 ```{r split_dataset, echo=TRUE, results='hide'}
 set.seed(1234) # For reproducibility
@@ -377,23 +358,26 @@ index <- createDataPartition(data$Churn, p=0.8, list=FALSE)
 training <- data[ index,]
 testing <- data[-index,]
 
-nrow(training)
-nrow(testing)
+nrow(training) # Number of observation for training
+nrow(testing) # Number of observation for testing
 ```
 
+
+\pagebreak
 # Exploratory Data Analysis (EDA)
+
+The aim is to uncover patterns, detect outliers, and test assumptions through visual and quantitative methods.
 
 ## Numeric variables.
 
-`ggpair` function allow us to create a scatter plot matrix for this three variables. For the visualization of this parameters, I decide to plot histograms.
+`ggpair` function from the GGally package, allow us to create a scatter plot matrix for this three variables. This matrix includes histograms for each variable along the diagonal, showcasing their distribution. The lower triangle displays scatter plots to explore the relationships between variable pairs, while the upper triangle shows the correlation coefficients, providing a quantitative measure of their relationships. This information allow us to identify the shape distribution, tendencies, outliers, among other things, thanks to different views in one grid.
 
-This matrix provides a visual representation, featuring histogram plots for each variable along the diagonal and showcasing pairwise relationships between variables in the lower triangular section. It also show on the top triangular the correlation coefficients for each pair of variables. The idea is to identify the shape distribution, tendencies, outliers, among other things, thanks to different views in one grid.
 
 ```{r scatterPlot_contiuous}
-# Select continuous variables
+# Select continuous variables (include target)
 continuous_data <- training[, c("tenure", "MonthlyCharges", "TotalCharges", "Churn")]
 
-# Create matrix of plots
+# Create scatter plot matrix
 ggpairs(continuous_data,
         aes(fill="pink"),
         lower = list(continuous = "points", combo = "box_no_facet"),
@@ -409,24 +393,45 @@ The histogram shows a bimodal distribution, with peaks at the extremes of the ra
 
 -   **MonthlyCharges**
 
-It can be observe a big peak at the begging of the distribution which represent a big amount of clients that pays around 25\$ per month on this company. On the other hand, there are more less a uniform number of customers that pays from 60\$ to 120\$.
+Displays a significant peak at the begging of the distribution, suggesting a big amount of clients that pays around 25\$ per month. On the other hand, the distribution becomes more uniform for charges between $60$\$ and $120$\$.
 
 -   **TotalCharges**
 
-It follows a right skewness distribution, which means most of the people are subscribe to services that require to pay less amount of money. It is clear, that clients are willing to pay around $1250 \$$. For trying to achieve a normal distribution I will apply a log transformation on this variable.
+It follows a right skewness distribution, which means most of the people are subscribe to services that require to pay less amount of money. It is clear, that clients are willing to pay no more than $1250 \$$. For trying to achieve a normal distribution I will apply a log transformation on this variable.
 
-If we deeper explore this variable related with the output, we get to the conclusion that clients who have not spent much are more likely to churn (`Churn`=$1$). On the other hand, clients that spend more amount of money, tends to stay more time with this company (`Churn`=$0$).
+**General insights**.
 
-```{r totalCharges_plot}
-ggplot(training, aes(x = TotalCharges, fill = factor(Churn))) +
+This analysis reveals non-normal distribution for the numeric variables due to the used of some statistical methods, the data will be standardized. In addition, it is worth mentioning the high correlation that exist between `tenure` and `TotalCharges` (correlation coefficient of $0.823$). Finally, it is also notably that this two parameters presents some outliers.
+
+**Relation with the output**.
+
+If we keep doing a deeper exploration, customers with lower total charges are more likely to leave (`Churn`=Yes). Furthermore, the second insight is regarding the tenure. The density plot lead us into the conclusion that clients tends to leave within the first year. This could be because they find better alternatives or due to dissatisfaction with the company.
+
+```{r totalCharges_plot, echo=FALSE}
+plot_TotalCaharges <- ggplot(training,
+                             aes(x = TotalCharges, fill = factor(Churn))) +
   geom_density(alpha = 0.5) + # Overlay density plots, alpha: transparency
   scale_fill_manual(values = c("#FFD39B", "lightblue1")) +
   labs(x = "Total Charges", y = "Density", fill = "Churn") +
-  theme_minimal() + # Theme
-  ggtitle("Density plot of TotalCharges by Churn status")
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5), # Center the title
+        plot.margin = unit(c(1, 1, 1, 1), "lines")) + # Adjust the margin
+  ggtitle("TotalCharges by Churn status")
+
+plot_tenure <- ggplot(training, aes(x = tenure, fill = factor(Churn))) +
+  geom_density(alpha = 0.5) + # Overlay density plots, alpha: transparency
+  scale_fill_manual(values = c("#FFD39B", "lightblue1")) +
+  labs(x = "Tenure (nº of months)", y = "Density", fill = "Churn") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5), # Center the title
+        plot.margin = unit(c(1, 1, 1, 1), "lines")) + # Adjust the margin
+  ggtitle("Tenure by Churn status")
+
+# Arrange plots in a grid
+grid.arrange(plot_TotalCaharges, plot_tenure, ncol = 2)
 ```
 
-**General insights**. The scatter plot matrix shown that none of the numeric variables follow a normal distribution. Due to the used of some methods, the data will be standardized. In addition, it is worth mentioning the high correlation presented between the variables, which are the ones that are above $0.7$: `tenure`-`TotalCharges` with a coefficient of $0.823$.
+**Data transformation code**.
 
 ```{r numeric_transf}
 # Numeric transformation
@@ -449,55 +454,95 @@ testing_transf[c("tenure", "MonthlyCharges", "TotalCharges")] <- scale(testing_t
 
 **Binary variables**.
 
-In a first general overview thanks to the table, we can see that `gender` as well as `Partner` are data equally represented on the dataset (almost $50\%$). Meanwhile, just around the $16\%$ of the people is a senior citizen, which makes sense and probably will be according to the real representation in a country.
+On the below table, we observe that `gender` as well as `Partner` are data equally represented on the dataset, with both categories close to a $50\%$ split. Meanwhile, only approximately $16$% of the observations belong to senior citizens. This information aligns with the demographic expectation.
 
-```{r eda_binary_table}
+```{r eda_binary_table, echo=FALSE}
 # For binary variables
-# Falta meter gender
 binary_variables <- c("SeniorCitizen", "Partner", "Dependents", 
                       "OnlineSecurity", "OnlineBackup", "DeviceProtection", 
                       "TechSupport", "StreamingTV", "StreamingMovies")
 
 # Information about data storage on training set -------------------------------
-summary(training_transf)
-# TODO: Arreglar la tabla
+summary_table <- lapply(binary_variables, function(variable) {
+  counts <- table(training[[variable]])
+  data.frame(
+    Variable = variable,
+    Category = names(counts),
+    Count = as.integer(counts)
+  )
+}) %>%
+  bind_rows() %>%
+  pivot_wider(names_from = Variable, values_from = Count)
+
+# Use kable() for a simple HTML table
+kable(summary_table, format = "html", escape = FALSE)
+
+# Gender needs to be done separately due to its output values
+gender_count <- training %>%
+  count(gender)
+
+# Print the gender count table
+kable(gender_count, format = "html")
 ```
 
-The following plots, shows the distribution of churn by each binary variable.
+The following plots aim to show the churn distribution across each binary variable. We realized that customer who leaves does not differ by gender or whether they have partner or not. It looks like, people who are subscribed to extra-services such as online security, online backup, device protection, and tech support or has dependents, they tend to stay at the company (`Churn`=No) most of the time.
 
-It can clearly, be observed that the lost of clients is very similar independently of the `gender` of the client and if the customer has a partner or not. Something similar happens with the remain variables. It is not a clear pattern.
+```{r eda_binary_plot, echo=FALSE}
+# Including gender
+bin_variables <- c("gender", "SeniorCitizen", "Partner", "Dependents",
+                   "OnlineSecurity", "OnlineBackup", "DeviceProtection",
+                   "TechSupport", "StreamingTV", "StreamingMovies")
 
-```{r eda_binary_plot}
 # Plots Churn by variable ------------------------------------------------------
 plot_churn_distribution <- function(data, variable) {
   plot_data <- data.frame(table(data[[variable]], data$Churn))
-  
+ 
   ggplot(plot_data, aes(x = Var1, y = Freq, fill = factor(Var2))) +
-    geom_bar(stat = "identity") +
-    labs(title = paste("Churn distribution by", variable),
+    geom_bar(stat = "identity",  position = position_dodge()) +
+    labs(title = paste("Churn by", variable),
          x = variable, y = "Count", fill = "Churn") +
-    theme_minimal()
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5, size = 10),
+          plot.margin = margin(10, 10, 10, 10))
 }
 
-
-plot_list <- lapply(binary_variables, function(variable) {
-  plot_churn_distribution(training, variable)
+# Plot the first four variables
+first_four_plots <- lapply(bin_variables[1:4], function(variable) {
+  plot_churn_distribution(training_transf, variable)
 })
 
-library(patchwork)
-combined_plots <- wrap_plots(plot_list, ncol = 3)
-combined_plots
-#grid.arrange(grobs = plot_list, ncol = 3) # Grid 4x3
+
+# Combine the first four plots
+combined_first_four <- wrap_plots(first_four_plots, ncol = 2) +
+  plot_layout(guides = 'collect') &
+  theme(plot.title = element_text(size = 12))
+
+# Display the first four plots
+print(combined_first_four)
+
+
+# Plot the next six variables
+next_six_plots <- lapply(bin_variables[5:10], function(variable) {
+  plot_churn_distribution(training_transf, variable)
+})
+
+# Combine the next six plots
+combined_next_six <- wrap_plots(next_six_plots, ncol = 3) +
+  plot_layout(guides = 'collect') &
+  theme(plot.title = element_text(size = 12))
+
+# Display the next six plots
+print(combined_next_six)
 ```
 
 **Category variables**.
 
-Recall there are $4$ variables: `InternetService`, `Contract`, `PaymentMethod`, `PhoneServiceType`. With the following plot we can observed how categories are distribute on a variable. Distribution of `PhoneServiceType` and `InternetService`, lead us into the conclusion that most of the clients choose having phone/internet service above not having. On the other hand, `PaymentMethod` are more less equally distributed hence customer might not have a prefer way to pay. Finally, it looks like clients favorite contract type is to revenue it month by month.
+Next step consist on explore the $4$ multi-state variables: `InternetService`, `Contract`, `PaymentMethod`, and `PhoneServiceType`. Some insights from this plots are that a majority of customers prefer having internet as well as phone services, suggesting they are essential services. However, there is no a favorite payment method, more less equally distributed. Lastly, it looks like clients most popular choice is to revenue the contract month by month.
 
-```{r eda_category_distribution}
+```{r eda_category_distribution, echo=FALSE}
 # InternetService
 plot_internetService <- ggplot(training, aes(x = InternetService)) +
-  geom_bar(fill = "cornflowerblue") +
+  geom_bar(fill = "lightblue1") +
   labs(title = "Distribution of Internet Service Types",
        x = "Internet Service",
        y = "Count") +
@@ -532,9 +577,9 @@ plot_phoneServiceType <- ggplot(training, aes(x = as.factor(PhoneServiceType))) 
 grid.arrange(plot_internetService, plot_contract, plot_paymentMethod, plot_phoneServiceType, ncol = 2)
 ```
 
-Finally, if we study the relationship of these variables with the target we realized that people who design to revenue its contract each $2$ years, are loyal clients (which almost never change to another company). Another insight is that people that pay by electronic check tends to abandon the company more than with other payments.
+Finally, if we study the relationship of these variables with the target we realized people with two year contracts tends to be loyaler clients (which are less likely to change to another company). While customer paying by electronic check have a higher probability to abandon the company.
 
-```{r eda_category_byChurn}
+```{r eda_category_byChurn, echo=FALSE}
 # Melt the training data to long format for faceting
 category_data <- melt(training, id.vars = "Churn", measure.vars = c("InternetService", "Contract", "PaymentMethod", "PhoneServiceType"))
 
@@ -551,40 +596,67 @@ ggplot(category_data, aes(x = value, fill = Churn)) +
         strip.text.x = element_text(size = 10))
 ```
 
+
 ## Correlation matrix
 
-```{r correlation_matrix}
-# Corr not works for factors:
-# 'InternetService', 'Contract', 'PaymentMethod' are not numeric and were ignored
-ggcorr(training[,-1], label = T)
+The heatmap represents the strength and direction of the relationships between the variables in the dataset, where the color intensity indicates the magnitude of the correlation. Dark colors, that can be either blue (positive) or red (negative), suggest a stronger relationship between variables. A positive coefficient means that an increase (or decrease) in one variable is associated with an increase (or decrease) in the other. Conversely, a negative correlation indicated that as one variables increase, the other decrease. And, color in the middle are interpreted as weak correlations.
 
-# TODO: Arreglar el plot
-# TODO: Add some conclusion about variables more influential
+For dealing with mixed data type, the `hetcor`function from the `psych` [@psych_ref] package in R is used. This enable the computation of correlation across numeric, binary and multi-state variables as long as the qualitative variable are represented in factors.
+
+```{r correlation_heatmap}
+# Works for mix variables: binay, multi-state and numeric
+# Qualitative variables have to be in factor
+
+cor_matrix <- hetcor(training_transf)
+cor_values <- cor_matrix$correlations
+corrplot(cor_values, method="color", type="upper", order="hclust",
+         tl.cex=0.7, tl.col="black", tl.srt=45)
 ```
 
-This matrix give us the strength and direction of relationship between the variables of my dataset. In where, larger values (does not matter if positive or negative) suggest a stronger relationships.
+**Analytical exploration**
 
-If the coefficient is positive, then this means that if one of the evaluated variables increases (or decreases) the other will also do so. While if the coefficient is negative; While one variable increases, the other decreases.
+Coefficients higher than $0.7$ or lower than $-0.7$ are considered strong. In this dataset we encounter $5$ strong relationship, that can be shown on the below table.
 
-Next step, consist on getting the determinant and trace of the covariance matrix in order to compare the results of the variables before and after applying the proper transformation.
+Most of this relationships are kind of obvious. For instance, if the client spend more time having the company services, then it accumulated charges will be higher too. However, we can get an interesting insight: customers who subscribe to one streaming service are likely to subscribe to the other (`StreamingMovies `-`StreamingTV` = $0.7526$).
+
+```{r correlation_analysis}
+cor_flat <- as.data.frame(as.table(cor_values))
+cor_flat <- cor_flat[order(-abs(cor_flat$Freq)),]
+
+# Filter correlations: >0.7 or <-0.7
+strong_correlations <- subset(cor_flat, abs(Freq) > 0.7 & Var1 != Var2)
+
+# Remove duplicates rows
+strong_correlations$pairID <- apply(strong_correlations[, c("Var1", "Var2")], 
+                                    1,
+                                    function(x) paste(sort(x), collapse = "-"))
+strong_correlations <- strong_correlations[!duplicated(strong_correlations$pairID),]
+strong_correlations$pairID <- NULL # Remove ID
+
+# Add sign
+strong_correlations$Sign <- ifelse(strong_correlations$Freq > 0, "+", "-")
+
+pander(strong_correlations)
+```
 
 ## Target variable
 
-```{r}
-table(data$Churn)
+To see the distribution of our target variable (`Churn`), we first look at the raw counts and then at the percentages to understand the proportion of customers who leave versus those who stay with the company's services.
 
-# TODO: Unbalance between the 2 classes (?)
+```{r target_distribution}
+# Check counts of Churn
+pander(table(data$Churn))
+
+# Results in percentage
+pander(prop.table(table(data$Churn)) * 100)
 ```
 
-We can see that the dataset is imbalanced. There are more people information about Churn=No. This is something, we will must solve.
+The dataset is slightly imbalance in the distribution of the `Churn` variable. There are more observations from clients who decide to stay with the company services (`Churn`=No) than who decide to leave. Although the existence of imbalance on the dataset, it is relatively minor.
 
-```{r eval=FALSE}
-# In order to check proportion are still the same
-table(data$Churn)/length(data$Churn)
-table(X_train$Churn)/length(X_train$Churn)
-table(X_test$Churn)/length(X_test$Churn)
-```
+After applying a sampling technique in order to solve this issue, no improvement was observed in the model's performance. In fact, the results were worse compared to using the original data proportions. This results suggest that the imbalance may not impact the model's accuracy. Therefore, I have decided not to apply any methods for balancing the dataset when computing the statistical tools. However, code for performing upsampling is provided in the [Annex section](#annex).
 
+
+\pagebreak
 # Statistical tools
 
 This second section aim is to evaluate the performance of different classification models for the binary classification task we are deal with. For each of these techniques, we will also compute the confusion matrix, a tool which will indicate us how many instances were correctly classified and how many were misclassified. The task attempts to estimate whether or not a customer intends to stop using a company's services based on sevaral variables such as gender, monthly charges, and payment method, among others.
@@ -603,13 +675,15 @@ n_test <- dim(testing_transf)[1]
 
 ## Bayes classifiers
 
-We configure a comon train control parameter.
+We configure a common train control parameter.
 
 ```{r}
 # Set up train control -> 5 repeats of 10-fold cross validation
 train_ctrl <- trainControl(method = "repeatedcv",
                            repeats = 5,
-                           number = 10)
+                           number = 10) # Resolve class imbalances
+
+# "smote" require the themis packages
 ```
 
 ### QDA
@@ -769,47 +843,161 @@ ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 ```
 
+
 ## Incorporing economic impact
 
-From all models compute, I choose as the best one the one with lowest error and highest accuracy. This models is the Logistic Regression classifier.
+From all models compute, I choose as the best one the one with lowest error and highest accuracy. This models is the Logistic Regression classifier. Also, if we take a look at the ROC curves, we can also conclude that it is better to use also the Logistic regression classifier.
+
+```{r}
+# Specific library
+library(pROC)
+
+# Calculate ROC objects for each model
+roc_LDA <- roc(response = testing_transf$Churn,
+               predictor = post_prob_LDA[,"Yes"],
+               levels = c("No", "Yes"))
+roc_QDA <- roc(response = testing_transf$Churn,
+               predictor = post_prob_QDA[,"Yes"],
+               levels = c("No", "Yes"))
+roc_NB <- roc(response = testing_transf$Churn, 
+              predictor = post_prob_NB[,"Yes"],
+              levels = c("No", "Yes"))
+roc_LR <- roc(response = testing_transf$Churn,
+              predictor = post_prob_LR[,"Yes"], 
+              levels = c("No", "Yes"))
+
+# Create a data frame for ggplot2
+roc_data <- data.frame(
+  Specificity = c(1 - roc_LDA$specificities,
+                  1 - roc_QDA$specificities,
+                  1 - roc_NB$specificities,
+                  1 - roc_LR$specificities),
+  Sensitivity = c(roc_LDA$sensitivities,
+                  roc_QDA$sensitivities,
+                  roc_NB$sensitivities, 
+                  roc_LR$sensitivities),
+  Model = factor(rep(c("LDA", "QDA", "Naive Bayes", "Logistic Regression"),
+                     each=length(roc_LDA$sensitivities)))
+)
+
+# Plot ROC curves
+ggplot(roc_data, 
+       aes(x=Specificity, y=Sensitivity, color=Model)) +
+  geom_line() +
+  geom_abline(linetype="dashed", color="gray") +  # Add a diagonal dashed line
+  scale_color_manual(values=c("darkorange",
+                              "deepskyblue4", 
+                              "chartreuse4",
+                              "purple")) +
+  labs(title="ROC Curves Comparison", x="1 - Specificity", y="Sensitivity") +
+  theme_minimal() +
+  theme(legend.title=element_blank(), legend.position="bottom") +
+  annotate("text", x=0.75, y=0.25,
+           label=paste("AUC LDA:", round(auc(roc_LDA), 3)), 
+           color="darkorange") +
+  annotate("text", x=0.75, y=0.20,
+           label=paste("AUC QDA:", round(auc(roc_QDA), 3)), 
+           color="deepskyblue4") +
+  annotate("text", x=0.75, y=0.15, 
+           label=paste("AUC NB:", round(auc(roc_NB), 3)),
+           color="chartreuse4") +
+  annotate("text", x=0.75, y=0.10, 
+           label=paste("AUC LR:", round(auc(roc_LR), 3)), 
+           color="purple")
+```
+
+```{r}
+## Some pruebas --------------------------------------------------------------
+library(plotly)
+library(pROC)
+
+fig <- plot_ly() %>%
+  add_trace(x = 1 - roc_LDA$specificities, 
+            y = roc_LDA$sensitivities, type = 'scatter', mode = 'lines',
+            name = paste("LDA - AUC:", round(auc(roc_LDA), 3)),
+            line = list(color = 'darkorange')) %>%
+  add_trace(x = 1 - roc_QDA$specificities, y = roc_QDA$sensitivities, type = 'scatter', mode = 'lines',
+            name = paste("QDA - AUC:", round(auc(roc_QDA), 3)),
+            line = list(color = 'deepskyblue4')) %>%
+  add_trace(x = 1 - roc_NB$specificities, y = roc_NB$sensitivities, type = 'scatter', mode = 'lines',
+            name = paste("Naïve Bayes - AUC:", round(auc(roc_NB), 3)),
+            line = list(color = 'chartreuse4')) %>%
+  add_trace(x = 1 - roc_LR$specificities, y = roc_LR$sensitivities, type = 'scatter', mode = 'lines',
+            name = paste("Logistic Regression - AUC:", round(auc(roc_LR), 3)),
+            line = list(color = 'purple')) %>%
+  layout(title = "ROC Curves Comparison",
+         xaxis = list(title = "1 - Specificity", zeroline = FALSE),
+         yaxis = list(title = "Sensitivity", zeroline = FALSE),
+         legend = list(x = 0.1, y = 0.9))
+
+fig # Print the plot
+```
+
+
 
 **Recall**. `Churn`: Yes = the customer left the company and No = the customer remained with the company.
 
+On the previous models, we have assume all wrong prediction that makes the model have the same consequences for the company. However, this is not true. For instance, there are wrong prediction that can caused losses on the company. Imagine the model predict that a customer is going to still having the services (Churn=No) for the next period of time with this company, but it reality this client will leave (Churn=Yes) and canceld all the subscriptions with this company. It is clearly, that we will earn less money that we expected.
+On the other hand, if the model predict that a client will leave but in reality he never though about leaving, thereby he will stay with this company. This will no suposse any problem or loss on the company's accounts.
+
+If we take a look on the confusion matric of the logistic regression classifier:
+
+| predictions_LR    |  No   | Yes   |
+|-------------------|------:|------:|
+| No                |  944  |  168  |
+| Yes               |  90   |  205  |
 
 
-Peor error para la company: -\> predecir que se queda (NO) -\> valor real que se vaya (YES)
+Note: row (model's predictions) columns (actual/real value).
 
-```         
-      Reference
-```
+Worst error in the table is the one with committed 168 times with this model. Now, the goal is to decreasing this error by changing the probability threshold. And we can select the optimal threshold using some specific economic effects.
 
-Prediction No Yes No 944 168 Yes 90 205
-
-Note: filas (lo que se predice) columnas (valor real)
-
-Peor error en la tabla es: 168
+**Assumption used for doing this exercise**:
+- If the company predicts a customer is going to stay and it actually stay, the company gains a 12% profil at the end of the quarter.
+- If the company predicts a customer is going to stay but he leaves, then the loss is 100%.
+- If the company predict a customer is going to leave but he actually stay, then the profit is 10%.
+- If the company predict a customer is going to leave and he actually leave, then the profit is 0%.
 
 Table of profits:
 
 | Prediction/Actual |  Stay | Leave |
 |-------------------|------:|------:|
-| Stay              |   0.0 |  -1.0 |
-| Leave             | -0.01 |   0.0 |
+| Stay              | 0.20  | -1.0  |
+| Leave             | -0.01 | 0.03  |
 
 For instance, a naive manager would incur a profit per applicant of $0.12\times0.93 - 1.0\times0.07 - 0.01\times0.0 + 0.0\times0.0 = 0.0416$
+
+```{r}
+# Confusion matrix values
+TN = 944
+FP = 168
+FN = 90
+TP = 205
+
+# Profit/loss percentages
+profit_TN = 0.20
+loss_FP = -1.0
+profit_FN = -0.01
+profit_TP = 0.03
+
+# Compute profit per applicant
+profit_per_applicant = (TN * profit_TN + FP * loss_FP + FN * profit_FN + TP * profit_TP) / (TN + FP + FN + TP)
+profit_per_applicant
+```
+
 
 This is the profit we should improve
 
 Profit table as a vector:
 
-```{r}
-profit.unit <- c(0.12, -0.01, -1.0, 0.0)
+```{r hyper-tuning_model_economic}
+profit.unit <- c(0.20, -0.01, -1.0, 0.03)
 
 ## Selecting the optimal threshold to give the loan
 profit.i = matrix(NA, nrow = 50, ncol = 10)
 # 100 replicates for training/testing sets for each of the 10 values of threshold
-
-p0=0.8
+ 
+p0=0.73
 p1=1-p0
 
 j <- 0
@@ -826,21 +1014,21 @@ for (threshold in seq(0.05,0.5,0.05)){
     d <- createDataPartition(training_transf$Churn, p = 0.4, list = FALSE)
     # select training sample
     
-    train<-training[d,]
-    test <-training[-d,]  
+    train<-training_transf[d,]
+    test <-training_transf[-d,]  
     
     #p1=1-p0
     # Fit logistic regression model
-    full.model <- glm(Churn ~ ., data = train, family = "binomial")
+    full.model <- glm(Churn ~ ., data = training_transf, family = "binomial")
     
     # Obtain predicted probabilities on test set
-    probabilities <- predict(full.model, newdata = test, type = "response")
+    probabilities <- predict(full.model, testing_transf, type = "response")
 
     # Convert probabilities to predicted classes based on threshold
     Churn_pred <- ifelse(probabilities > threshold, "Yes", "No")
     
     # Create confusion matrix
-    CM <- table(Churn_pred, test$Churn)
+    CM <- table(Churn_pred, testing_transf$Churn)
 
     # Calculate profit per applicant
     profit.applicant <- sum(profit.unit*CM)/sum(CM)
@@ -849,36 +1037,60 @@ for (threshold in seq(0.05,0.5,0.05)){
   }
 }
 
-
 boxplot(profit.i, main = "Hyper-parameter selection",
         ylab = "unit profit",
         xlab = "threshold", names = seq(0.05,0.5,0.05),col="royalblue2")
 
+# Storage all profits computed
+all_profits_comp <- apply(profit.i, 2, median)
+all_profits_comp
 
-apply(profit.i, 2, median) 
+# Find the best threshold
+best_threshold <- all_profits_comp[which.max(all_profits_comp)]
+best_threshold
 ```
 
-```{r eval=FALSE}
-lr.model <- glm(Churn ~ ., data = train, family = "binomial")
-probability = predict(lr.model, testing_transf$Churn)$posterior
-threshold = 0.019096421
-Cred.pred = rep("Good", nrow(testing))
-Cred.pred[which(probability[,2] > threshold)] = "Bad"
-CM = confusionMatrix(factor(Cred.pred), testing$Creditability)$table
+```{r model_economic}
+## Final prediction for testing set using the optimal hyper-parameter:
+# Fit the logistic regression model using the training data
+final_model <- train(Churn ~ .,
+                     data = training_transf, 
+                     method = "glm", 
+                     family = "binomial", 
+                     trControl = train_ctrl)
+
+# Predict probabilities on the test set
+probabilities_post <- predict(model_LR, newdata = testing_transf, type = "prob")
+
+# Make final predictions using the best threshold
+final_predictions <- ifelse(probabilities_post[, "Yes"] > best_threshold, 
+                            "Yes", "No")
+
+# Confusion matrix
+confusionMatrix(factor(final_predictions), testing_transf$Churn)
+CM <- confusionMatrix(factor(final_predictions), testing_transf$Churn)$table
+
+
 profit.applicant <- sum(profit.unit*CM)/sum(CM)
 profit.applicant
 ```
 
+As we can observed the profit of the company increase but we create a worse model. However, due to the importance of obtaining benefits, this model even though it make more mistakes it is much beneficial to the company.
+
+
+\pagebreak
 # Conclusion
 
 ```{r}
 ############ Summary ERRORS ############
 ## QDA -----------------------------------------------
 # Sin balanceo, sin log-transformation: 23.52523%
-# Sin balanceo, con log-transformation: 22.95665
+# Sin balanceo, con log-transformation: 22.95665%
+# Con balanceo, con log-transformation: 25.65743% (up)
 ## LDA -----------------------------------------------
 # Sin balanceo, sin log-transformation: 18.8344%
 # Sin balanceo, con log-transformation: 18.69225%
+# Con balanceo, con log-transformation: 24.37811%
 ## NB ------------------------------------------------
 # Sin balanceo, sin log-transformation: 22.10377%
 # Sin balanceo, sin log-transformation: 21.39% (with caret)
@@ -889,6 +1101,8 @@ profit.applicant
 ## LR ------------------------------------------------
 # Sin balanceo, sin log-transformation: 19.62% (with caret)
 # Sin balanceo, con log-transformation: 18.33689%
+## Incorporing economic impact -----------------------
+# Sin balanceo, con log-transformation: 58.85% (with caret)
 ```
 
 # References
@@ -898,5 +1112,167 @@ profit.applicant
 # knitr::write_bib(.packages(), "references.bib")
 ```
 
-::: {#refs}
-:::
+<div id="refs"></div>
+
+# Annex: fixing unbalanced dataset {#annex}
+
+In my specif situation, the method that has more sense is to downsampling. So I do not need to "make up" values. Downsampling, consist on reduce the majority class.
+
+There are other manners to solve this issue as a hybrid method named **smote**. This technique down-sample the majority class and synthesize new data points in the minority class. This procedure we will be implemented on the following section and it will be establishes as a common configuration for all statistical tools.
+
+
+For all this models, we configure a common train control parameter.
+
+```{r}
+# Now, it is time to solve the umblance of my dataset
+# Using Synthetic Minority Oversampling Technique to produce more samples where customers churn out
+
+# Set up train control -> 5 repeats of 10-fold cross validation
+train_ctrl_balanced <- trainControl(method = "repeatedcv",
+                                    repeats = 5,
+                                    number = 10,
+                                    sampling = "down") # Resolve class imbalances
+
+```
+
+
+## QDA
+
+```{r}
+# Train the QDA model using caret
+model_QDA_b <- train(Churn ~ .,    
+                    data = training_transf,
+                    method = "qda",
+                    trControl = train_ctrl_balanced) # Use the defined train control
+print(model_QDA_b)
+
+# Predictions
+predictions_QDA_b <- predict(model_QDA_b, X_test)
+head(predictions_QDA_b)
+
+# Posterior probabilities
+post_prob_QDA_b <- predict(model_QDA_b, X_test, type = "prob")
+head(post_prob_QDA_b)
+
+# Performance measures
+confMat_QDA_b <- table(predictions_QDA_b, testing_transf$Churn)
+addmargins(confMat_QDA_b)
+
+# Error of the model
+error_QDA_b <- (n_test - sum(diag(confMat_QDA_b))) / n_test
+error_QDA_b
+```
+
+
+## LDA
+
+```{r}
+# Ensure the correct train control is used for the balanced LDA model
+model_LDA_b <- train(Churn ~ .,    
+                    data = training_transf,
+                    method = "lda",
+                    trControl = train_ctrl_balanced) # Correctly use the balanced train control
+print(model_LDA_b)
+
+# Predictions for the balanced LDA model
+predictions_LDA_b <- predict(model_LDA_b, X_test)
+head(predictions_LDA_b)
+
+# Posterior probabilities for the balanced LDA model
+post_prob_LDA_b <- predict(model_LDA_b, X_test, type = "prob")
+head(post_prob_LDA_b)
+
+# Performance measures for the balanced LDA model
+confMat_LDA_b <- table(predictions_LDA_b, testing_transf$Churn)
+addmargins(confMat_LDA_b)
+
+# Calculate the error rate for the balanced LDA model
+error_LDA_b <- (n_test - sum(diag(confMat_LDA_b))) / n_test
+error_LDA_b
+```
+
+
+### Naïve Bayes
+
+```{r}
+# Train Naive Bayes model
+model_NB <- train(x = X_train, 
+                  y = y_train, 
+                  method = "naive_bayes", 
+                  trControl = train_ctrl,
+                  tuneLength = data.frame(laplace = 0.5,
+                                      usekernel = FALSE,
+                                      adjust = FALSE))
+
+
+# Predict on test data
+predictions_NB <- predict(model_NB, newdata = X_test)
+head(predictions_NB)
+
+# Posterior probabilities
+post_prob_NB <- predict(model_NB, X_test, type = "prob")
+head(post_prob_NB)
+
+# Evaluate the model using confusion matrix
+confusionMatrix(predictions_NB, y_test)
+
+# Performance measures -> withou using caret
+confMat_NB <- table(predictions_NB, testing_transf$Churn)
+addmargins(confMat_NB)
+
+# Error of the model
+error_NB <- (n_test - sum(diag(confMat_NB))) / n_test
+error_NB
+
+# Plot
+ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
+  geom_point(aes(y = post_prob_NB[,"Yes"], color = Churn)) +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("No" = "deepskyblue2", "Yes" = "firebrick2")) +
+  xlab("Individual") +
+  ylab("Probability of Churn with Naïve Bayes") +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+```
+
+### Shrinkage classification
+
+## Logistic regression
+
+```{r}
+model_LR <- train(Churn ~.,
+                  data = training_transf,
+                  method = "glm",
+                  family = "binomial", # For binary logistic regression
+                  trControl = train_ctrl)
+
+# Print the model summary
+print(model_LR)
+
+# Predict on test data
+predictions_LR <- predict(model_LR, X_test)
+head(predictions_LR)
+
+# Posterior probabilities
+post_prob_LR <- predict(model_LR, X_test, type = "prob")
+head(post_prob_LR)
+
+# Evaluate the model using confusion matrix
+confusionMatrix(predictions_LR, y_test)
+
+# Performance measures -> without using caret
+confMat_LR <- table(predictions_LR, testing_transf$Churn)
+addmargins(confMat_LR)
+
+# Error of the model
+error_LR <- (n_test - sum(diag(confMat_LR))) / n_test
+error_LR
+
+# Plot
+ggplot(data = testing_transf, aes(x = seq_along(testing_transf$Churn))) +
+  geom_point(aes(y = post_prob_LR[,"Yes"], color = Churn)) +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("No" = "deepskyblue2", "Yes" = "firebrick2")) +
+  xlab("Individual") +
+  ylab("Probability of Churn with Logistic regression") +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+```
