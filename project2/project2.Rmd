@@ -1,0 +1,112 @@
+---
+title: 'Project 2: Machine-learning tools'
+author: "Gabriela Levenfeld Sabau"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    number_sections: yes   
+    toc: TRUE              
+    toc_float: TRUE
+  geometry: left=3cm,right=3cm,top=2cm,bottom=2cm
+  mathjax: local
+  self_contained: false
+subtitle: MS in Statistics for Data Science
+#bibliography: references.bib
+nocite: '@*'
+link-citations: true
+linkcolor: blue
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+## Dataset description
+## Variables description
+bp		-	blood pressure
+sg		-	specific gravity
+al		- albumin
+su		-	sugar
+rbc		-	red blood cells
+pc		-	pus cell
+pcc		-	pus cell clumps
+ba		-	bacteria
+bgr		-	blood glucose random
+bu		-	blood urea
+sc		-	serum creatinine
+sod		-	sodium
+pot		-	potassium
+hemo		-	hemoglobin
+pcv		-	packed cell volume
+wc		-	white blood cell count
+rc		-	red blood cell count
+htn		-	hypertension
+dm		-	diabetes mellitus
+cad		-	coronary artery disease
+appet		-	appetite
+pe		-	pedal edema
+ane		-	anemia
+class		-	class
+
+\pagebreak
+# Data preprocessing
+
+This section focuses on preparing the dataset for exploratory data analysis (EDA) and applying the computational models. This include loading the necessary material, handling missing values, encoding categorical variables, and splitting the dataset into training and testing subsets, among other tasks.
+
+## Load material.
+
+**Load libraries**. Several libraries are need for the project in order to work properly.
+
+```{r load_libraries, message=FALSE, warning=FALSE}
+library(skimr) # Summary statistics
+library(tidyverse) # Include ggplot2, dplyr, among others
+```
+
+**Load dataset**. Import the dataset.
+
+```{r load_data}
+data <- read.csv("kidney_disease.csv", header = TRUE, sep = ",")
+```
+
+**First look at the dataset**. Brief overview of the dataset for further preprocessing steps.
+
+```{r small_EDA1, eval=FALSE, include=FALSE}
+# Small Exploratory Data Analysis
+skim(data)
+# Presents results for every column; the statistics it provides depend on the class of the variable
+
+# For visualizing the first 2 rows
+head(data, 2)
+```
+
+```{r small_EDA2}
+glimpse(data)
+```
+
+## Delete unnecessary information.
+
+Some variables are removed due to its usefulness contribution on the model for making predictions.
+
+```{r rmv_columns}
+# Remove unnecessary variables
+data <- data %>% dplyr::select(-c(id))
+```
+
+## Handling missing data.
+
+```{r counting_NAs, eval=FALSE, include=FALSE, results='hide'}
+# Counting NA's ----------------------------------------------------------------
+missing_values <- colSums(is.na(data))
+sort(missing_values, decreasing = TRUE)
+
+percentage_na <- missing_values/nrow(data)*100 # NA's in %
+sort(percentage_na, decreasing = TRUE)
+
+# Get the index of the rows where TotalCharges=NA
+index_age_na <- which(is.na(data$age))
+data[index_age_na,]
+print(index_age_na)
+```
