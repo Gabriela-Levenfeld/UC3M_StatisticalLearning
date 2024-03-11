@@ -12,7 +12,7 @@ output:
   self_contained: false
 subtitle: MS in Statistics for Data Science
 #bibliography: references.bib
-nocite: '@*'
+#nocite: '@*'
 link-citations: true
 linkcolor: blue
 ---
@@ -26,30 +26,37 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Dataset description
 ## Variables description
-bp		-	blood pressure
-sg		-	specific gravity
-al		- albumin
-su		-	sugar
-rbc		-	red blood cells
-pc		-	pus cell
-pcc		-	pus cell clumps
-ba		-	bacteria
-bgr		-	blood glucose random
-bu		-	blood urea
-sc		-	serum creatinine
-sod		-	sodium
-pot		-	potassium
-hemo		-	hemoglobin
-pcv		-	packed cell volume
-wc		-	white blood cell count
-rc		-	red blood cell count
-htn		-	hypertension
-dm		-	diabetes mellitus
-cad		-	coronary artery disease
-appet		-	appetite
-pe		-	pedal edema
-ane		-	anemia
-class		-	class
+**Quantitative**
+bp		-	Blood pressure
+bgr		-	Blood glucose random
+bu		-	Blood urea
+sc		-	Serum creatinine
+sod		-	Sodium
+pot		-	Potassium
+hemo	-	Hemoglobin
+pcv		- Packed cell volume
+wbcc		-	White blood cell count
+rbcc		-	Red blood cell count
+
+**Qualitative, Categorical**
+sg		-	Specific gravity
+al		- Albumin
+su		-	Sugar
+
+**Qualitative, Binary**
+rbc		-	Red blood cells
+pc		-	Pus cell
+pcc		-	Pus cell clumps
+ba		-	Bacteria
+htn		-	Hypertension
+dm		-	Diabetes mellitus
+cad		-	Coronary artery disease
+appet	-	Appetite
+pe		-	Pedal edema
+ane		-	Anemia
+
+**Target**
+class	-	class
 
 \pagebreak
 # Data preprocessing
@@ -65,10 +72,36 @@ library(skimr) # Summary statistics
 library(tidyverse) # Include ggplot2, dplyr, among others
 ```
 
-**Load dataset**. Import the dataset.
+**Load dataset**. The dataset was store as an .arff file, in order to open the dataset I make some arrangement in python enviroment. I attatched the code used in order to generate a .csv so I can work with during the rest of the project.
 
-```{r load_data}
-data <- read.csv("kidney_disease.csv", header = TRUE, sep = ",")
+```{python open_file_python, eval=FALSE}
+# Require libraries ------------------------------------------------------------
+from scipy import io
+import pandas as pd
+
+# Load .arff file: extract the df and metadata ---------------------------------
+dataframe, meta = io.arff.loadarff('data/chronic_kidney_disease_full.arff')
+# Transform into pd df for handling
+dataframe = pd.DataFrame(dataframe) # Some variables are into b'value' (bad format)
+
+# Fixing bad format ------------------------------------------------------------
+def bytes_to_int(byte_value):
+    try:
+        return byte_value.decode('utf-8') # Decode bytes to a string
+    except AttributeError:
+        return byte_value # When it is already a string
+      
+# Apply the conversion function to the specified columns in df
+for column in dataframe.columns:
+    dataframe[column] = dataframe[column].apply(bytes_to_int)
+
+# Save the df to .csv file -----------------------------------------------------
+dataframe.to_csv("data/chronic_kidney_disease_full.csv", index=False)
+```
+
+```{r load_dataset, eval=FALSE}
+# Load new .csv dataset
+data <- read.csv("data/chronic_kidney_disease_full.csv", header = TRUE, sep = ",")
 ```
 
 **First look at the dataset**. Brief overview of the dataset for further preprocessing steps.
@@ -92,7 +125,7 @@ Some variables are removed due to its usefulness contribution on the model for m
 
 ```{r rmv_columns}
 # Remove unnecessary variables
-data <- data %>% dplyr::select(-c(id))
+
 ```
 
 ## Handling missing data.
