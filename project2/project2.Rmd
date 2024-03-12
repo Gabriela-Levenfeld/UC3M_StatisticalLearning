@@ -24,8 +24,9 @@ knitr::opts_chunk$set(echo = TRUE)
 
 # Introduction
 
-## Dataset description
-## Variables description
+## Dataset description.
+
+## Variables description.
 **Quantitative**
 bp		-	Blood pressure
 bgr		-	Blood glucose random
@@ -35,10 +36,11 @@ sod		-	Sodium
 pot		-	Potassium
 hemo	-	Hemoglobin
 pcv		- Packed cell volume
-wbcc		-	White blood cell count
-rbcc		-	Red blood cell count
+wbcc	-	White blood cell count
+rbcc	-	Red blood cell count
 
 **Qualitative, Categorical**
+All this $3$ variables has a order.
 sg		-	Specific gravity
 al		- Albumin
 su		-	Sugar
@@ -70,9 +72,13 @@ This section focuses on preparing the dataset for exploratory data analysis (EDA
 ```{r load_libraries, message=FALSE, warning=FALSE}
 library(skimr) # Summary statistics
 library(tidyverse) # Include ggplot2, dplyr, among others
+library(pander)
+library(caret) # Models
+library(mice) # Imputation missing data
+library(VIM) # Imputation plots
 ```
 
-**Load dataset**. The dataset was store as an .arff file, in order to open the dataset I make some arrangement in python enviroment. I attatched the code used in order to generate a .csv so I can work with during the rest of the project.
+**Load dataset**. The dataset was store as an .arff file, in order to open the dataset I make some arrangement in python enviroment. I attached the code used in order to generate a .csv so I can work with during the rest of the project.
 
 ```{python open_file_python, eval=FALSE}
 # Require libraries ------------------------------------------------------------
@@ -99,7 +105,7 @@ for column in dataframe.columns:
 dataframe.to_csv("data/chronic_kidney_disease_full.csv", index=False)
 ```
 
-```{r load_dataset, eval=FALSE}
+```{r load_dataset}
 # Load new .csv dataset
 data <- read.csv("data/chronic_kidney_disease_full.csv", header = TRUE, sep = ",")
 ```
@@ -118,28 +124,179 @@ head(data, 2)
 ```{r small_EDA2}
 glimpse(data)
 ```
+## Data cleaning and Feature engineering.
 
-## Delete unnecessary information.
+**Ensure consistency on the dataset**. Missing values are represented sometimes as "?" and other times as NA. To ensure consistency over the whole data, this can be done by converting all missing values if exist into same format. 
 
-Some variables are removed due to its usefulness contribution on the model for making predictions.
+```{r}
+# Convert "?" to NA
+data <- data.frame(lapply(data, function(x) ifelse(x == "?", NA, x)))
+```
 
-```{r rmv_columns}
-# Remove unnecessary variables
 
+**Duplicate data**. There is no duplicated data.
+
+```{r duplicate_data}
+duplicates <- data[duplicated(data), ]
+```
+
+**Encoding qualitative variables**. The goal is to get a dataset that our statistical models knows how to manage. This include, turn it into factor the categorical variables. Meanwhile, binary encoding is easy, for the multi-state variables strategy is slightly different due to the presence of natural order. This means, that a higher lever of this variables are directly relevant for medical conditions, clearly affecting to medical conditions such as chronic kidney disease. This variables `sg`, `al` and `su` represent the specific gravity, albumin and sugar. In order to make the proper encoding, it is mandatory to specify the importance of the order when creating this levels using the factor function.
+
+```{r data_cleaning, results='hide'}
+# Binary variables -------------------------------------------------------------
+# (Include the target variable)
+bin_and_target_vars <- c("rbc", "pc", "pcc", "ba", "htn", "dm", "cad", "appet", "pe", "ane", "class")
+
+for (var in bin_and_target_vars) {
+  data[[var]] <- as.factor(data[[var]])
+}
+
+# Categorical variables --------------------------------------------------------
+data$sg <- factor(data$sg, 
+                  levels = c("1.005", "1.010", "1.015", "1.020", "1.025"), 
+                  ordered = TRUE)
+data$al <- factor(data$al, 
+                  levels = c("0", "1", "2", "3", "4", "5"), 
+                  ordered = TRUE)
+data$su <- factor(data$su,
+                  levels = c("0", "1", "2", "3", "4", "5"),
+                  ordered = TRUE)
+
+# Checkings --------------------------------------------------------------------
+str(data) # To check all qualitative vars are in factor type
+levels(data$sg) # Check the levels of a specific variable
+table(data$al) # Check how many observation per level there is
+```
+
+**Drop categories on `al` and `su`**. `al` level $5$ contains just one observation, due to its low presence on the dataset it can be changed into level $4$ gaining stability and avoiding possible futures problems when imputing missing values. Same startegy is followed on `su` $4$ level. This approach assumes that the distinction between levels $4$ and $5$ is not significant.
+
+```{r}
+table(data$sg)
+table(data$al)
+table(data$su)
+```
+
+```{r drop_categories, results='hide'}
+# Reduce categories on al and su -----------------------------------------------
+# Transforming into numeric for easy replacement
+data$al <- as.numeric(as.character(data$al))
+data$su <- as.numeric(as.character(data$su))
+
+# Change level: 5 -> 4
+data$al[data$al == 5] <- 4
+data$su[data$su == 5] <- 4
+
+# Turn into factors (order) again without level 5
+data$al <- factor(data$al, 
+                  levels = c("0", "1", "2", "3", "4"),
+                  ordered = TRUE)
+data$su <- factor(data$su, 
+                  levels = c("0", "1", "2", "3", "4"), 
+                  ordered = TRUE)
+
+# Checkings --------------------------------------------------------------------
+table(data$al)
+table(data$su)
+```
+
+
+## Identify missing data.
+
+Next step focus on identify missing values on the dataset that can be due to typo errors, absence of this patient answers, etc.
+
+This dataset contains missing values, we must handle them in order to use the models (not all models support NA's). The above table shows the missing values by columns express in percentage. None of this variables superan a threshold of $60$% of missing values thus it is recommend to not delete any variable avoiding loosing this information.
+
+```{r counting_NAs}
+total_na <- sum(is.na(data)) # 1012 NA
+
+# Counting NA's ----------------------------------------------------------------
+missing_values <- colSums(is.na(data))
+sort_missing_values <- sort(missing_values, decreasing = TRUE)
+
+percentage_na <- missing_values/nrow(data)*100 # NA's in %
+sort(percentage_na, decreasing = TRUE)
+```
+
+**Delete patient information**. First approach is to take a look if there is a chance that data from a patient has not been well reported. There are $10$ observations that has between $7$ columns with invalid data. These rows are deleted, there is no sense on make up around the $45.83$% of information of a patient.
+
+```{r}
+# All observations with at least 1 NA ------------------------------------------
+obvs_with_na <- data[rowSums(is.na(data)) > 0, ]
+missing_counts <- rowSums(is.na(obvs_with_na))
+
+# df for storing number of NAs and corresponding indexes
+missing_info <- data.frame(
+  count = names(table(missing_counts)),
+  indexes = tapply(names(missing_counts), missing_counts, paste, collapse = ", ")
+)
+
+pander(missing_info)
+
+# Delete patients with 11 NA variables -----------------------------------------
+rows_to_delete <- c(60, 87, 105, 149, 166, 223, 229)
+data <- data[!rownames(data) %in% rows_to_delete, ]
+```
+
+## Split the dataset.
+
+This step consist on divide the dataset into two subsets. The training set, takes $80$% of the data and it is used to train the models. This subset allows the model to learn patterns and relationships within the data. On the other hand, testing set ($20$% of the data) is used by unseen data to evaluate the performance of the trained model.
+
+```{r split_dataset, results='hide'}
+set.seed(1234) # For reproducibility
+
+# Split into training (80%) and testing (20%) set
+index <- createDataPartition(data$class, p=0.8, list=FALSE)
+training <- data[ index,]
+testing <- data[-index,]
+
+nrow(training) # Number of observation for training
+nrow(testing) # Number of observation for testing
 ```
 
 ## Handling missing data.
 
-```{r counting_NAs, eval=FALSE, include=FALSE, results='hide'}
-# Counting NA's ----------------------------------------------------------------
-missing_values <- colSums(is.na(data))
-sort(missing_values, decreasing = TRUE)
+```{r warning=FALSE, message=FALSE, results='hide'}
+# MICE Imputation --------------------------------------------------------------
+meth <- rep("rf", length = ncol(training)) # Set all methods to RF model
 
-percentage_na <- missing_values/nrow(data)*100 # NA's in %
-sort(percentage_na, decreasing = TRUE)
+# Generates 4 imputations
+mice_model <- mice(training,
+                   m = 4, maxit = 5, method = meth,
+                   seed = 1234, print = FALSE
+                   )
 
-# Get the index of the rows where TotalCharges=NA
-index_age_na <- which(is.na(data$age))
-data[index_age_na,]
-print(index_age_na)
+# Complete the train data with the first imputation
+training_imp <- complete(mice_model, 1)
+
+# Function to impute new observations based on the previous imputation model
+source("https://raw.githubusercontent.com/prockenschaub/Misc/master/R/mice.reuse/mice.reuse.R")
+
+# Apply the imputation model to the testing set and extract the first imputation
+testing_imp <- mice.reuse(mice_model, testing, maxit = 1)[[1]]
 ```
+
+**Perform diagnostics of how the imputation is working**.
+
+```{r performance_mice1, fig.align='center', fig.height=3, fig.width=4}
+# Plot 1: Represent the % of missing data
+aggr(training_imp,
+     col = c("navyblue", "yellow"),
+     numbers = TRUE,
+     sortVars = FALSE,
+     labels = names(training_imp),
+     cex.axis = .7,
+     gap = 3,
+     ylab = c("Missing data", "Observed data")
+)
+```
+
+
+```{r performance_mice2, fig.align='center', fig.height=4, fig.width=5}
+# Plot 2: Check it follows the distribution of the original variable
+densityplot(mice_model)
+
+# Plot 3: Visualize the imputed values for the 'age' variable across multiple imputations
+# https://www.gerkovink.com/miceVignettes/Convergence_pooling/Convergence_and_pooling.html
+stripplot(mice_model, pch = 19, xlab = "Imputation number")
+```
+
