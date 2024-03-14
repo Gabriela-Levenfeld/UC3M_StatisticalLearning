@@ -457,7 +457,7 @@ pander(summary_poor, format = "html", escape = FALSE)
 
 The following grid of bar charts aim to show the target distribution across each binary variable. When looking at parameter related with infections, such as `ba` (bacteria) and `pcc` (pus cell clumps), these are less frequent in the overall dataset, but when they do occur, they are predominantly found in patients with kidney disease (class = `ckd`). In addition, poor appetite seems to be a common symptom in patients with ckd. Hypertension (`htn`) and diabetes mellitus (`dm`) are variables where storage a high number of sick patients with this conditions.
 
-```{r eda_binary_plot, echo=FALSE, fig.align='center'}
+```{r eda_binary_plot, message=FALSE, warning=FALSE, echo=FALSE, fig.align='center'}
 binary_vars <- c("rbc", "pc", "pcc", "ba", "htn", "dm", "cad", "appet", "pe", "ane")
 
 # Bar plots by output ----------------------------------------------------------
@@ -546,21 +546,29 @@ ggplot(category_data, aes(x = value, fill = class)) +
 
 The heatmap represents the strength and direction of the relationships between the variables in the dataset, where the color intensity indicates the magnitude of the correlation. Dark colors, that can be either blue (positive) or red (negative), suggest a stronger relationship between variables. A positive coefficient means that an increase (or decrease) in one variable is associated with an increase (or decrease) in the other. Conversely, a negative correlation indicated that as one variables increase, the other decrease. And, color in the middle are interpreted as weak correlations.
 
-For dealing with mixed data type, the `hetcor`function from the `psych` [@psych_ref] package in R is used. This enable the computation of correlation across numeric, binary and multi-state variables as long as the qualitative variable are represented in factors.
+For dealing with mixed data type, the `hetcor` function from the `psych` [@psych_ref] package in R is used. This enable the computation of correlation across numeric, binary and multi-state variables as long as the qualitative variable are represented in factors. When coding this step some inconveniences have been encountered with `al` and `htn` variables. To address this issue, both parameters are treated numerically to facilitate its computation in the correlation analysis.
 
-```{r corr_heatmap}
-# This apporach not working for two of the variables
-training_no_cat <- training_transf[, !(names(training_transf) %in% c("al", "htn"))]
+```{r corr_heatmap, warning=FALSE, message=FALSE, fig.align='center'}
+training_modify <- training_transf
 
-# Works for mix variables: binay, multi-state and numeric
+# Some transformation needed for handling problematic variables: al, htn
+training_modify$al <- as.numeric(as.character(training_modify$al))
+#contrasts(training_transf$htn) # no as 0 and yes as 1
+training_modify$htn <- as.numeric(training_modify$htn)
+
+# Works for mix variables: binary, multi-state and numeric
 # Qualitative variables have to be in factor
-cor_matrix <- hetcor(training_no_cat)
+cor_matrix <- hetcor(training_modify)
 cor_values <- cor_matrix$correlations
 corrplot(cor_values, method="color", type="upper", order="hclust",
          tl.cex=0.7, tl.col="black", tl.srt=45)
 ```
 
-**Analytical exploration**
+**Analytical exploration**.
+
+Thanks to this exploration $17$ strong relationships have been discovered (the threshold for filter the correlations is set to coefficients higher than $0.7$ or lower than $-0.7$). However, I decided to focus on the top $8$ with the most significant impact, which can seen on the below table.
+
+Most of this relationships are kind of intuitive. For example, having diabetes is closely linked to higher sugar levels, and a lower amount of hemoglobin seems to be associated with anemia. Overall, it is realised how related metabolomic and blood measures are when identifying chronic kidney disease,
 
 ```{r}
 cor_flat <- as.data.frame(as.table(cor_values))
@@ -579,11 +587,9 @@ strong_correlations$pairID <- NULL # Remove ID
 # Add sign
 strong_correlations$Sign <- ifelse(strong_correlations$Freq > 0, "+", "-")
 
-pander(strong_correlations)
-head(strong_correlations, 5)
+#pander(strong_correlations) # 17 high realtionship
+head(strong_correlations, 8) # Display the highest 8 relations
 ```
-
-
 
 ## Target variable.
 
@@ -600,7 +606,7 @@ pander(prop.table(table(data$class)) * 100)
 \pagebreak
 # Machine-learning tools
 
-First, it is defined some common consideration that I will assume for all models implemented.
+For this section are defined some common consideration that I will assume for all models implemented.
 
 1º. The dataset is divided into predictors and the target variable.
 
@@ -613,6 +619,59 @@ X_test <- testing_transf %>% dplyr::select(-class)
 y_test <- testing_transf$class
 n_test <- dim(testing_transf)[1]
 ```
+
+2º. Control to optimize the hyper-parameters.
+
+```{r eval=FALSE}
+ctrl <- trainControl(method = "repetcv", number = 5,
+                     classProbs = TRUE, 
+                     summaryFunction = EconomicProfit,
+                     verboseIter=T)
+```
+
+## k-Nearest Neighbors
+
+```{r eval=FALSE}
+knnFit <- train(class ~ ., 
+                method = "knn", 
+                data = training_transf,
+                tuneLength = 7,
+                metric = "Accuracy",
+                trControl = ctrl)
+# We use 7 values of k
+print(knnFit)
+```
+
+## SVM
+
+```{r}
+# Training the model -----------------------------------------------------------
+svmFit <- train(class ~., method = "svmRadial", 
+                data = training:training_transf,
+                tuneGrid = expand.grid(C = c(.25, .5, 1),
+                                      sigma = c(0.01,.05)), 
+                metric = "Accuracy",
+                trControl = ctrl)
+
+print(svmFit) # Summary (?)
+
+
+# Predictions -----------------------------------------------------------------
+svmPred = predict(svmFit, testing_transf)
+confusionMatrix(svmPred, testing_transf$class)
+
+# Creo que esto no tiene sentido en mi caso por set accuracy as my metric
+EconomicProfit(data = data.frame(pred  = svmPred, obs = testing_transf$class))
+```
+
+
+## Decision trees, Random Forests, Gradient Boosting
+X-gradiend boosting
+## Neural Networks
+Y tb Deep.NN
+
+\pagebreak
+# Social impact
 
 2º. **Economic assumption used**. Incorporating a custom metric in Caret.
 
@@ -643,35 +702,6 @@ EconomicProfit <- function(data, lev = NULL, model = NULL)
   out
 }
 ```
-
-3º. Control to optimize the hyper-parameters.
-
-```{r eval=FALSE}
-ctrl <- trainControl(method = "repetcv", number = 5,
-                     classProbs = TRUE, 
-                     summaryFunction = EconomicProfit,
-                     verboseIter=T)
-```
-
-## k-Nearest Neighbors
-
-```{r eval=FALSE}
-knnFit <- train(class ~ ., 
-                method = "knn", 
-                data = training_transf,
-                tuneLength = 7,
-                metric = "EconomicProfit",
-                trControl = ctrl)
-# We use 7 values of k
-print(knnFit)
-```
-
-
-## SVM
-## Decision trees, Random Forests, Gradient Boosting
-X-gradiend boosting
-## Neural Networks
-Y tb Deep.NN
 
 \pagebreak
 # References
