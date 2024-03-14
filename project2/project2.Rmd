@@ -11,8 +11,8 @@ output:
   mathjax: local
   self_contained: false
 subtitle: MS in Statistics for Data Science
-#bibliography: references.bib
-#nocite: '@*'
+bibliography: references.bib
+nocite: '@*'
 link-citations: true
 linkcolor: blue
 ---
@@ -81,6 +81,10 @@ library(VIM) # Imputation plots
 library(GGally) # Plots of the continuous variables
 library(psych) # Compute the skewness and correlation matrix
 library(polycor) # Compute correlation heatmap mix data type
+library(patchwork) # Plot grid
+library(gridExtra) # For grid.arrange
+library(corrplot) # Correlation matrix
+library(reshape2) # Data reshaping (melt)
 ```
 
 **Load dataset**. The dataset was store as an .arff file, in order to open the dataset I make some arrangement in python enviroment. I attached the code used in order to generate a .csv so I can work with during the rest of the project.
@@ -132,7 +136,7 @@ glimpse(data)
 
 ## Data cleaning and Feature engineering.
 
-**Ensure consistency on the dataset**. Missing values are represented sometimes as "?" and other times as NA. To ensure consistency over the whole data, this can be done by converting all missing values if exist into same format. 
+**Ensure consistency on the dataset**. Missing values are represented sometimes as "?" and other times as NA. To ensure consistency over the whole data, it is converted all missing values into the same format. 
 
 ```{r}
 # Convert "?" to NA
@@ -150,7 +154,7 @@ duplicates <- data[duplicated(data), ]
 
 ```{r data_cleaning, results='hide'}
 # Binary variables -------------------------------------------------------------
-# (Include the target variable)
+# (Included the target variable)
 bin_and_target_vars <- c("rbc", "pc", "pcc", "ba", "htn", "dm", "cad", "appet", "pe", "ane", "class")
 
 for (var in bin_and_target_vars) {
@@ -223,9 +227,9 @@ percentage_na <- missing_values/nrow(data)*100 # NA's in %
 sort(percentage_na, decreasing = TRUE)
 ```
 
-**Delete patient information**. First approach is to take a look if there is a chance that data from a patient has not been well reported. There are $10$ observations that has between $7$ columns with invalid data. These rows are deleted, there is no sense on make up around the $45.83$% of information of a patient.
+**Delete patient information**. First approach is to take a look if there is a chance that data from a patient has not been well reported. There are $10$ observations that has $7$ columns with invalid data. These rows are deleted, there is no sense on make up around the $45.83$% of information of a patient.
 
-```{r}
+```{r rm_rows}
 # All observations with at least 1 NA ------------------------------------------
 obvs_with_na <- data[rowSums(is.na(data)) > 0, ]
 missing_counts <- rowSums(is.na(obvs_with_na))
@@ -261,7 +265,7 @@ nrow(testing) # Number of observation for testing
 
 ## Handling missing data.
 
-```{r warning=FALSE, message=FALSE, results='hide'}
+```{r mice_imputation, warning=FALSE, message=FALSE, results='hide'}
 # MICE Imputation --------------------------------------------------------------
 meth <- rep("rf", length = ncol(training)) # Set all methods to RF model
 
@@ -313,9 +317,9 @@ The aim is to uncover patterns, detect outliers, and test assumptions through vi
 
 ## Numeric variables.
 
-`ggpair` function from the GGally package [@GGally_ref], allow us to create a scatter plot matrix for this variables. This matrix includes histograms for each variable along the diagonal, showcasing their distribution. The lower triangle displays scatter plots to explore the relationships between variable pairs, while the upper triangle shows the correlation coefficients, providing a quantitative measure of their relationships. This information allow us to identify the shape distribution, tendencies, outliers, among other things, thanks to different views in one grid.
+The `ggpair` function from the GGally package [@GGally_ref], allow us to create a scatter plot matrix for this variables. This matrix includes histograms for each variable along the diagonal, showcasing their distribution. The lower triangle displays scatter plots to explore the relationships between variable pairs, while the upper triangle shows the correlation coefficients, providing a quantitative measure of their relationships. This information allow us to identify the shape distribution, tendencies, outliers, among other things, thanks to different views in one grid.
 
-```{r scatterPlot_contiuous, warning=FALSE, message=FALSE}
+```{r scatterPlot_contiuous, fig.align='center', message=FALSE, warning=FALSE}
 # Select continuous variables (include target)
 scatterPlot_data <- training_imp[, c("bp", "bgr", "bu", "sc", "sod", "pot", "hemo", "pcv", "wbcc", "rbcc", "class")]
 
@@ -331,45 +335,34 @@ ggpairs(scatterPlot_data,
 
 **General insights**.
 
-- This analysis reveals non-normal distribution for the numeric variables, due to the used of some machine learning methods (as *Neural networks*), the data will be transformed depending on its skewness distribution. Posi
+1. This analysis reveals a non-normal distribution for the numeric variables. To improve the data distribution for machine learning methods, such as *Neural networks*, the data will be transformed depending on its skewness. This below table shows the skewness measures for each variable and it has been obtained from `psych` [@psych_ref] package. Log-transformation are applied to variables with positive skewness (`bp`, `bgr`, `bu`, `sc`, `pot` and `wbcc`), while a square transformation is used for `sod` with negative skewness. Notice that the threshold for decision-making is set at skewness values above $1$ or below $-1$.
 
-
-- Furtheremore data are going to be standardized. Models such as *Nearest Neighbors*, *Neural networks*, among others, will benefits and it will not affect to the other methods as *Gradient Boosting*. For more precision on the making-decision, `psych` package has been used. Conclusion reach thanks to the above table are apply log-transformation for positive skewness (`bp`, `bgr`, `bu`, `sc`, `pot` and `wbcc`) and ^2 for negative skewness (`sod`). Take into account that I consider presence of skewness for values above $1$ or below $-1$.
-
-```{r warning=FALSE, message=FALSE,echo=FALSE}
+```{r skewness_analysis, warning=FALSE, message=FALSE, echo=FALSE}
 numeric_data <- training_imp[, c("bp", "bgr", "bu", "sc", "sod", "pot", "hemo", "pcv", "wbcc", "rbcc")]
 skewness <- round(skew(numeric_data), 1)
 result_df <- data.frame(variable = colnames(numeric_data), skewness = skewness)
 pander(result_df)
 ```
 
-- In addition, it is worth mentioning the high correlation ($>0.7$ or $< -0.7$) that exist between:
-`pcv`-`hemo`: correlation coefficient of 0.869
-`rbcc`-`hemo`: correlation coefficient of 0.770
-`rbcc`-`pcv`: correlation coefficient of 0.766
+2. Standardization of Data. The data will be standardized to benefit models that are sensitive to the scale of the data, such as *K-Nearest Neighbors* and *Neural Networks*. This step will not affect negatively to the other models like *Gradient Boosting*, which are less sensitive to scaling.
 
-- Finally, it is also notably that this parameters presents some outliers.
+3. About correlation coefficients. It is worth mentioning that this dataset contains high correlation between some variables, this value is identify when coefficients are grater than $>0.7$ or lower than $< -0.7$). For instance, packed cell volume (`pcv`) and hemoglobin (`hemo`) have a strong positive correlation coefficient of $0.869$. From a biologically point of view makes sense, both parameter are related with the amount of oxygen going through human blood. Hemoglobin is the protein in red blood cells that carries oxygen, while the packed cell volume represents the volume percentage of red blood cells in blood. Moreover, red blood cells count (`rbcc`) is also highly correlated with `hemo` ($0.770$) and `pcv` ($0.766$) indicating that if one of this parameter increase the other one will increase too.
 
-**Relation with the output**. We make a deeper exploration with the most correlate variables.
+4. Outliers. It is notably the presence of some outliers over the variables. This observations (referring to the outliers) represent individuals with extreme values probably due to underlying medical conditions or measurement errors. Notice that this observations may influence directly the model performance and the conclusion derived from the data analysis.
 
-```{r deeperExploration, warning=FALSE, message=FALSE}
+**Relation with the output**. A deeper exploration of the most correlated variables with the target, `class`, let some important insights on identify chronic kidney disease and healthy patients. First pattern obtained is that people with chronic kidney disease (class = `ckd`) tend to have lower values of hemoglobin (`hemo`), packed cell volume (`pcv`), and red blood cell count (`rbcc`) as indicated by the red density distributions. In contrast, healthy patients (class = `notckd`) have higher values for these parameters, as shown by blue density distribution. Moreover, boxplots demonstrated same insight as before, with median values of `hemo`, `pcv`, and `rbcc` being lower in the chronic kidney disease group. Last distinction observed on the boxplots is about on how the outliers exist just on unhealthy people distribution. This situation might highlight the complexity for diagnosis and identifying the chronic kidney disease due to weird and unexpected behavior of this patients. 
+
+```{r deeperExploration, warning=FALSE, message=FALSE, fig.align='center'}
 deeperExploration_vars <- training_imp[, c("hemo", "pcv", "rbcc", "class")]
 
+# Most correlate variables separate by target
 ggpairs(deeperExploration_vars,
-        aes(fill = class),
-        lower = list(continuous = "points", combo = "box_no_facet"),
+        aes(color = class, fill = class), # Apply color based on 'class'
+        lower = list(continuous = wrap("points", alpha = 0.5)), # Transparency
         upper = list(continuous = "cor"),
-        diag = list(continuous = "densityDiag"),
-        title = "Scatter plot matrix"
-       ) +
-  # FIXME: Plot overlapping
-  ggplot2::geom_point(data = training_imp,
-                      aes(x = hemo, y = pcv, color = class), alpha = 0.5) +
-  ggplot2::geom_point(data = training_imp,
-                      aes(x = hemo, y = rbcc, color = class), alpha = 0.5) +
-  ggplot2::geom_point(data = training_imp,
-                      aes(x = pcv, y = rbcc, color = class), alpha = 0.5)
-
+        diag = list(continuous = wrap("densityDiag", alpha = 0.5))
+) + 
+  theme(legend.position = "bottom")
 ```
 
 **Data transformation code**.
@@ -403,24 +396,165 @@ testing_transf[c("bp", "bgr", "bu", "sc", "sod", "pot", "hemo", "pcv", "wbcc", "
 
 ## Cualitative variables.
 
-**Binary variables**.
+**Binary variables**. Some tables are display in order to understand better the dataset.
+First table indicates that most of the patients have normal levels of red blood cells (`rbc`) and pus cell (`pc`). In the second table, the majority of data is regarding people without pus cell clumps (`pcc`) and bacteria (`ba`). The third table focus on various conditions, including hypertension (`htn`), diabetes mellitus (`dm`), coronary artery disease (`cad`), pedal edema (`pe`), and anemia (`ane`). Hypertension and diabetes mellitus seems as the more common conditions among the patients. Meanwhile the other parameters are present in no more than $19$% of the people tested, thus these conditions might not be commontly within the population. Finally, most people of the dataset report having a good appetite.
+In summary, the binary variables are not equally distributed on this dataset.
+
+```{r eda_binary_tables, echo=FALSE, warning=FALSE, message=FALSE}
+# Tables for distributions -----------------------------------------------------
+# Create tables depending on the possible output
+summary_abnormal <- lapply(c("rbc", "pc"), function(variable) {
+  counts <- table(training_transf[[variable]])
+  data.frame(
+    Variable = variable,
+    Category = names(counts),
+    Count = as.integer(counts)
+  )
+}) %>%
+  bind_rows() %>%
+  pivot_wider(names_from = Variable, values_from = Count)
+
+summary_notpresent <- lapply(c("pcc", "ba"), function(variable) {
+  counts <- table(training_transf[[variable]])
+  data.frame(
+    Variable = variable,
+    Category = names(counts),
+    Count = as.integer(counts)
+  )
+}) %>%
+  bind_rows() %>%
+  pivot_wider(names_from = Variable, values_from = Count)
+
+summary_noYes <- lapply(c("htn", "dm", "cad", "pe", "ane"), function(variable) {
+  counts <- table(training_transf[[variable]])
+  data.frame(
+    Variable = variable,
+    Category = names(counts),
+    Count = as.integer(counts)
+  )
+}) %>%
+  bind_rows() %>%
+  pivot_wider(names_from = Variable, values_from = Count)
+
+summary_poor <- lapply(c("appet"), function(variable) {
+  counts <- table(training_transf[[variable]])
+  data.frame(
+    Variable = variable,
+    Category = names(counts),
+    Count = as.integer(counts)
+  )
+}) %>%
+  bind_rows() %>%
+  pivot_wider(names_from = Variable, values_from = Count)
 
 
+# Print tables
+pander(summary_abnormal, format = "html", escape = FALSE)
+pander(summary_notpresent, format = "html", escape = FALSE)
+pander(summary_noYes, format = "html", escape = FALSE)
+pander(summary_poor, format = "html", escape = FALSE)
+```
+
+The following grid of bar charts aim to show the target distribution across each binary variable. When looking at parameter related with infections, such as `ba` (bacteria) and `pcc` (pus cell clumps), these are less frequent in the overall dataset, but when they do occur, they are predominantly found in patients with kidney disease (class = `ckd`). In addition, poor appetite seems to be a common symptom in patients with ckd. Hypertension (`htn`) and diabetes mellitus (`dm`) are variables where storage a high number of sick patients with this conditions.
+
+```{r eda_binary_plot, echo=FALSE, fig.align='center'}
+binary_vars <- c("rbc", "pc", "pcc", "ba", "htn", "dm", "cad", "appet", "pe", "ane")
+
+# Bar plots by output ----------------------------------------------------------
+# Reshape the df to long
+long_data <- pivot_longer(training_transf, 
+                          cols = binary_vars, 
+                          names_to = "variable", 
+                          values_to = "value")
+
+# Combined plots with facet_wrap
+p <- ggplot(long_data, aes(x = value, fill = as.factor(class))) + 
+  geom_bar(position = "dodge", stat = "count") +
+  facet_wrap(~variable, scales = "free_x") + 
+  labs(y = 'Count', fill = 'Class') + 
+  theme_minimal() + 
+  theme(axis.text.x = element_text(hjust = 1),
+        strip.text.x = element_text(face = "bold")) + 
+  scale_fill_brewer(palette = "Set2")
+
+print(p) # Display grid
+```
 
 **Category variables**.
 
-## Correlation matrix
+Next step consist on explore the $3$ multi-state variables: specific gravity (`sg`), albumin (`al`), and sugar (`su`). Specific gravity clearly shows that levels $1.020$ and $1.025$ are the common levels for healthy people. Conversely, lower states are more prevalent among the presence of chronic kidney disease. On the other hand, healthy population is expect to have a level $0$ of albumin as well as a low level of sugar. Otherwise, levels indicates a higly link to this chronic disease.
+
+```{r eda_category_distribution, echo=FALSE, fig.align='center'}
+# Plot for Specific Gravity (sg)
+plot_sg <- ggplot(training_transf, aes(x = as.factor(sg), fill = class)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Distribution of Specific Gravity by target",
+       x = "Specific Gravity",
+       y = "Count") +
+  scale_fill_brewer(palette = "Pastel2") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 10),
+        plot.margin = margin(10, 10, 10, 10))
+
+# Plot for Albumin (al)
+plot_al <- ggplot(training_transf, aes(x = as.factor(al), fill = class)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Distribution of Albumin by target",
+       x = "Albumin",
+       y = "Count") +
+  scale_fill_brewer(palette = "Pastel2") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 10),
+        plot.margin = margin(10, 10, 10, 10))  
+
+# Plot for Sugar (su)
+plot_su <- ggplot(training_transf, aes(x = as.factor(su), fill = class)) +
+  geom_bar(position = "dodge") +
+  labs(title = "Distribution of Sugar by target",
+       x = "Sugar",
+       y = "Count") +
+  scale_fill_brewer(palette = "Pastel2") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 10),
+        plot.margin = margin(10, 10, 10, 10))
+
+# Arrange plots in a grid
+grid.arrange(plot_sg, plot_al, plot_su, ncol = 2)
+```
+
+Additionally, in order to confirm the above insights some stacked bar chart has been code. This plots shows the proportion of people with and without chronic kindey disease across the different categories of these three multi-state variables. All patterns are confirmed.
+
+```{r eda_category_proportion, echo=FALSE, warning=FALSE, message=FALSE}
+category_data <- melt(training_transf,
+                      id.vars = "class",
+                      measure.vars = c("sg", "al", "su"))
+
+# Create the combined plot using the melted data
+ggplot(category_data, aes(x = value, fill = class)) + 
+  geom_bar(position = "fill") +
+  scale_fill_manual(values = c("notckd" = "darkolivegreen3", "ckd" = "brown3")) +
+  labs(title = "Relationship with class",
+       x = "", y = "Proportion") +
+  facet_wrap(~variable, scales = "free_x", nrow = 2) +
+  theme_minimal() +
+  theme(legend.position = "bottom",
+        strip.background = element_blank(),
+        strip.text.x = element_text(size = 10))
+```
+
+## Correlation matrix.
 
 The heatmap represents the strength and direction of the relationships between the variables in the dataset, where the color intensity indicates the magnitude of the correlation. Dark colors, that can be either blue (positive) or red (negative), suggest a stronger relationship between variables. A positive coefficient means that an increase (or decrease) in one variable is associated with an increase (or decrease) in the other. Conversely, a negative correlation indicated that as one variables increase, the other decrease. And, color in the middle are interpreted as weak correlations.
 
 For dealing with mixed data type, the `hetcor`function from the `psych` [@psych_ref] package in R is used. This enable the computation of correlation across numeric, binary and multi-state variables as long as the qualitative variable are represented in factors.
 
-```{r correlation_heatmap}
+```{r corr_heatmap}
+# This apporach not working for two of the variables
+training_no_cat <- training_transf[, !(names(training_transf) %in% c("al", "htn"))]
+
 # Works for mix variables: binay, multi-state and numeric
 # Qualitative variables have to be in factor
-
-# FIXME: Not working due to al, htn and class errors
-cor_matrix <- hetcor(training_transf)
+cor_matrix <- hetcor(training_no_cat)
 cor_values <- cor_matrix$correlations
 corrplot(cor_values, method="color", type="upper", order="hclust",
          tl.cex=0.7, tl.col="black", tl.srt=45)
@@ -428,10 +562,32 @@ corrplot(cor_values, method="color", type="upper", order="hclust",
 
 **Analytical exploration**
 
+```{r}
+cor_flat <- as.data.frame(as.table(cor_values))
+cor_flat <- cor_flat[order(-abs(cor_flat$Freq)),]
 
-## Target variable
+# Filter correlations: >0.7 or <-0.7
+strong_correlations <- subset(cor_flat, abs(Freq) > 0.7 & Var1 != Var2)
 
-To see the distribution of our target variable (`class`), we first look at the raw counts and then at the percentages to understand the proportion of sickness patients. To conclude, it is worth to mention there is no unbalance data on the target variable.
+# Remove duplicates rows
+strong_correlations$pairID <- apply(strong_correlations[, c("Var1", "Var2")], 
+                                    1,
+                                    function(x) paste(sort(x), collapse = "-"))
+strong_correlations <- strong_correlations[!duplicated(strong_correlations$pairID),]
+strong_correlations$pairID <- NULL # Remove ID
+
+# Add sign
+strong_correlations$Sign <- ifelse(strong_correlations$Freq > 0, "+", "-")
+
+pander(strong_correlations)
+head(strong_correlations, 5)
+```
+
+
+
+## Target variable.
+
+To see the distribution of our target variable (`class`), we first look at the raw counts and then at the percentages to understand the proportion of sickness patients. To conclude, it is worth mentioning that the output varibale is not imbalanced, thereby there is no need for upsampling or downsampling this parameter.
 
 ```{r target_distribution}
 # Check counts of chronic kidney disease
@@ -442,9 +598,82 @@ pander(prop.table(table(data$class)) * 100)
 ```
 
 \pagebreak
-# Machine Learning
+# Machine-learning tools
+
+First, it is defined some common consideration that I will assume for all models implemented.
+
+1º. The dataset is divided into predictors and the target variable.
+
+```{r split_subsets}
+# Divide into predictors and target both subsets
+X_train <- training_transf %>% dplyr::select(-class)
+y_train <- training_transf$class
+
+X_test <- testing_transf %>% dplyr::select(-class)
+y_test <- testing_transf$class
+n_test <- dim(testing_transf)[1]
+```
+
+2º. **Economic assumption used**. Incorporating a custom metric in Caret.
+
+- If the doctor correctly diagnose a patience does not have a chronic kidney disease, the 
+
+**Economic assumption used**.
+
+- If the company predicts a customer is going to stay and it actually stay, the company gains a 12% profit at the end of the quarter.
+
+- If the company predicts a customer is going to stay but he leaves, the loss is 100%.
+
+- If the company predict a customer is going to leave but he actually stay, the profit is 10%.
+
+- If the company predict a customer is going to leave and he actually leave, then the profit is 3%.
+
+Using the specified profits and losses for each prediction outcome, we compute the average profit per customer based on the model's predictions.
+
+```{r eval=FALSE}
+# lev=NULL is mandatory to get the k. So caret can interprretate this is the accuracy (or somthing like that ha dicho)
+profit_unit <- c(0.12, -0.01, -1.0, 0.0)
+EconomicProfit <- function(data, lev = NULL, model = NULL) 
+{
+  y_pred = data$pred 
+  y_true = data$obs
+  CM = confusionMatrix(y_pred, y_true)$table
+  out = sum(profit_unit*CM)/sum(CM)
+  names(out) <- c("EconomicProfit")
+  out
+}
+```
+
+3º. Control to optimize the hyper-parameters.
+
+```{r eval=FALSE}
+ctrl <- trainControl(method = "repetcv", number = 5,
+                     classProbs = TRUE, 
+                     summaryFunction = EconomicProfit,
+                     verboseIter=T)
+```
 
 ## k-Nearest Neighbors
+
+```{r eval=FALSE}
+knnFit <- train(class ~ ., 
+                method = "knn", 
+                data = training_transf,
+                tuneLength = 7,
+                metric = "EconomicProfit",
+                trControl = ctrl)
+# We use 7 values of k
+print(knnFit)
+```
+
+
 ## SVM
 ## Decision trees, Random Forests, Gradient Boosting
+X-gradiend boosting
 ## Neural Networks
+Y tb Deep.NN
+
+\pagebreak
+# References
+
+<div id="refs"></div>
