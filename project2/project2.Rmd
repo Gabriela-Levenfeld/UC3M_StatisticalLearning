@@ -85,6 +85,7 @@ library(polycor) # Compute correlation heatmap mix data type
 library(gridExtra) # For grid.arrange
 library(corrplot) # Correlation matrix
 library(reshape2) # Data reshaping (melt)
+library(pROC)
 ```
 
 **Load dataset**. The dataset was stored in an .arff format. To open the file, I made some arrangements using Python enviroment, I attached the code used in order to generate the .csv so I can work with during the rest of the project.
@@ -636,7 +637,19 @@ ctrl <- trainControl(method = "repeatedcv",
 ```
 
 **REVISAR ESTO!**
+
 3º. Same procedure has been conducted over all machine learning tools. First, it has been done a broad search of the hyper-parameter, I analyze the results to identify a more narrow range of these parameters values where performance seems to optimize, and then conduct a more focused search within that range. On this sections, the script shows the final hyper-parameter setting (narrow search), some comments can guide the reader to understand the selection of these values. Also, this narrow search allow the document to be less time-consuming.
+
+And important step always is to take a look of the parameters we can handle, when using the caret library.
+
+```{r caret_exploration_models, results='hide'}
+# Models supported by caret
+names(getModelInfo())
+
+# In order to explore which parameter can be tune
+name_caret_model <- "knn" # Change me!
+modelLookup(name_caret_model)
+```
 
 ## k-Nearest Neighbors
 
@@ -644,7 +657,7 @@ ctrl <- trainControl(method = "repeatedcv",
 # Hyper-parameter search -------------------------------------------------------
 # K no more than 50% of the training set size.
 # From lecture: preferable to try odd numbers for k
-knn_grid = expand.grid(k = seq(3, 121, by = 2))
+knn_grid <- expand.grid(k = seq(3, 121, by = 2))
 
 # Training the model -----------------------------------------------------------
 knn_fit <- train(class ~ .,
@@ -654,10 +667,12 @@ knn_fit <- train(class ~ .,
                 metric = "Accuracy",
                 trControl = ctrl)
 print(knn_fit)
+# Best values: k = 3
 
 # Predictions on test ----------------------------------------------------------
 knn_pred = predict(knn_fit, X_test)
 knn_pred_prob = predict(knn_fit, X_test, type = "prob")
+# REVIEW: With prob predictions, we can vary the threshold
 
 # Performance measures ---------------------------------------------------------
 confusionMatrix(knn_pred, y_test)
@@ -675,7 +690,7 @@ TESTING PERFORMANCE
 # Plot tuning hyper-parameter --------------------------------------------------
 knn_results_search <- knn_fit$results
 
-# df results_knn to long format
+# df to long format
 knn_results_long <- melt(knn_results_search,
                      id.vars = "k", 
                      measure.vars = c("Accuracy", "Kappa"),
@@ -693,8 +708,11 @@ ggplot(knn_results_long, aes(x = k, y = Value, color = Metric)) +
   theme(plot.title = element_text(hjust = 0.5), legend.title = element_blank()) +
   theme(legend.position = "bottom")
 
+# Plot importance on training --------------------------------------------------
+knn_var_imp <- varImp(knn_fit, scale=FALSE)
+plot(knn_var_imp, main="Variable importance for KNN")
+
 # Plot testing performance -----------------------------------------------------
-## OPTION 1, by testing observation
 # Convert the test set and predictions into a suitable dataframe for ggplot
 kkn_test_plot <- data.frame(
   Individual = seq_along(y_test),
@@ -714,64 +732,248 @@ ggplot(data = kkn_test_plot, aes(x = Individual,
   theme_minimal() +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
-## OPTION 2, by class output
-kkn_test_plot <- data.frame(Actual = y_test, PredictedProb = knn_pred_prob[, "notckd"])
-ggplot(kkn_test_plot, aes(x = Actual, y = PredictedProb, color = Actual)) +
-  geom_jitter(width = 0.2, height = 0) +
-  scale_color_manual(values = c("notckd" = "blue", "ckd" = "firebrick2")) +
-  xlab("Actual class") +
-  ylab("Predicted probability of class") +
-  ggtitle("Predicted Probabilities by Actual class") +
-  theme_minimal() + 
-  theme(plot.title = element_text(hjust = 0.5), legend.title = element_blank()) +
-  geom_hline(yintercept = 0.5, linetype = "dashed")
-
 # ROC --------------------------------------------------------------------------
-library(pROC)
-
 roc_obj <- roc(y_test, knn_pred_prob[,2])
 plot(roc_obj, main="ROC Curve for Optimal KNN Model")
 ```
 
-```{r eval=FALSE}
-# TODO: Delete this chunks -> Plot I do not think that really enhance the explation at the report
-ggplot(data.frame(Probability_CKD = knn_pred_prob[, "ckd"]),
-       aes(x = Probability_CKD)) +
-  geom_histogram(binwidth = 0.1, fill = "blue", color = "black") +
-  xlab("Predicted probability of CKD") +
-  ylab("Count") +
-  ggtitle("Histogram of Predicted Probabilities")
-# Insigths: We get kind of a bimodal distribution, which is quite nice. This suggest the model is quite certain about its predictions, either being very high or very low probabilities with fewer cases in the middle. In other words, the model is pretty sure of the response and just a few times is less sure about the correct answer.
-```
+## Support Vector Machines
 
-## SVM
+Well know as SVM, the idea is to maximize the gap between the two classes. This models works really nice for non-linear problems. The original sample is transformed into a higher space (using kernels: lineal, polinomial, gaussian (radial-basis), two-layer perceptron, etc.).
+Some advantages that make it think it can work properly for this dataset is that SVM is not influenced by outlier (that we have some) and does no make overfitting.
 
-```{r eval=FALSE}
+```{r}
+# Hyper-parameter search -------------------------------------------------------
+# C; compromising between low errors and weights values
+# sigma; determine how far the influence of a single training example reaches.
+svm_grid <- expand.grid(C =  c(1e-1, 1e0, 1e1, 1e2, 1e3, 1e4), 
+                        sigma = c(0.01, 0.05, 0.1, 0.5, 1, 2, 5)
+                        )
+
 # Training the model -----------------------------------------------------------
-svmFit <- train(class ~., method = "svmRadial", 
+svm_fit <- train(class ~., method = "svmRadial", 
                 data = training_transf,
-                tuneGrid = expand.grid(C =  c(1e-1, 1e0, 1e1, 1e2, 1e3, 1e4),
-                                      sigma = c(0.01,.05)), 
+                tuneGrid = svm_grid, 
                 metric = "Accuracy",
                 trControl = ctrl)
 
-print(svmFit)
+print(svm_fit)
+# Best values: sigma = 0.5 and C = 0.1
 
 # Predictions -----------------------------------------------------------------
-svmPred = predict(svmFit, testing_transf)
-confusionMatrix(svmPred, testing_transf$class)
+svm_pred = predict(svm_fit, X_test)
+svm_pred_prob = predict(svm_fit, X_test, type = "prob")
+# REVIEW: With prob predictions, we can vary the threshold
 
-# Creo que esto no tiene sentido en mi caso por set accuracy as my metric
-EconomicProfit(data = data.frame(pred  = svmPred, obs = testing_transf$class))
+# Performance measures ---------------------------------------------------------
+confusionMatrix(svm_pred, y_test)
 ```
 
+**Performance of the model**
+
+```{r svm_measures, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
+# Plot tuning hyper-parameter --------------------------------------------------
+selected_sigma_values <- unique(svm_fit$results$sigma)
+svm_results_filtered <- subset(svm_fit$results, sigma %in% selected_sigma_values)
+
+ggplot(svm_results_filtered, aes(x=log10(C), y=Accuracy, color=factor(sigma))) + 
+  geom_line() + 
+  geom_point() +
+  xlab("log10(C)") + 
+  ylab("Accuracy") +
+  ggtitle("Accuracy vs. C for selected sigma Values") +
+  scale_color_discrete(name = "sigma") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5), legend.title = element_blank())
+
+# Plot importance on training --------------------------------------------------
+svm_var_imp <- varImp(svm_fit, scale=FALSE)
+plot(svm_var_imp, main="Variable importance for SVM")
+
+# Plot testing performance -----------------------------------------------------
+# Convert the test set and predictions into a suitable dataframe for ggplot
+svm_test_plot <- data.frame(
+  Individual = seq_along(y_test),
+  Probability_CKD = svm_pred_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+ggplot(data = svm_test_plot, aes(x = Individual, 
+                                 y = Probability_CKD, 
+                                 color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Probability of class with KNN") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+
+# ROC --------------------------------------------------------------------------
+roc_obj <- roc(y_test, svm_pred_prob[,2])
+plot(roc_obj, main="ROC Curve for Optimal KNN Model")
+```
 
 ## Decision trees, Random Forests, Gradient Boosting
+
+### Decision trees
+
+In general, some advantages are: interpretability, automatic feature selection, less data cleaning (NAs and outliers). There is no existance of missing values, but there are some outliers this model can actually works really nice.
+
+**rpart model**
+
+Limited DT model, it does not support boosting option. 
+
+```{r}
+# Hyper-parameter search -------------------------------------------------------
+# cp; size of the tree
+rpart_grid <- expand.grid(.cp = c(0.01, 0.05, 0.1)                          )
+
+# Training the model -----------------------------------------------------------
+rpart_fit <- train(class ~., 
+                 method = "rpart",
+                 data = training_transf,
+                 tuneGrid = rpart_grid,
+                 metric = "Accuracy",
+                 trControl = ctrl)
+
+print(rpart_fit)
+# Best values: cp = 0.01
+
+# Predictions -----------------------------------------------------------------
+rpart_pred = predict(rpart_fit, X_test)
+rpart_pred_prob = predict(rpart_fit, X_test, type = "prob")
+# REVIEW: With prob predictions, we can vary the threshold
+
+# Performance measures ---------------------------------------------------------
+confusionMatrix(rpart_pred, y_test)
+```
+
+```{r warning=FALSE, message=FALSE}
+# DT visualization -------------------------------------------------------------
+# REVIEW: Choose the second option, it is more visually appeling
+# plot the model
+plot(rpart_fit$finalModel, uniform=TRUE,
+     main="Classification Decision Tree")
+text(rpart_fit$finalModel, use.n.=TRUE, all=TRUE, cex=.8)
+
+suppressMessages(library(rattle))
+fancyRpartPlot(rpart_fit$finalModel)
+
+# Plot tuning hyper-parameter --------------------------------------------------
+plot(rpart_fit, main = 'Hyper-parameter tuning - Decision tree')
+
+# Plot importance on training --------------------------------------------------
+rpart_var_imp <- varImp(rpart_fit, scale=FALSE)
+plot(rpart_var_imp, main="Variable importance for Decision Tree")
+
+# Plot testing performance -----------------------------------------------------
+# Convert the test set and predictions into a suitable dataframe for ggplot
+rpart_test_plot <- data.frame(
+  Individual = seq_along(y_test),
+  Probability_CKD = rpart_pred_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+ggplot(data = rpart_test_plot, aes(x = Individual, 
+                                 y = Probability_CKD, 
+                                 color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Probability of class with rpart") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+
+# ROC --------------------------------------------------------------------------
+roc_obj <- roc(y_test, rpart_pred_prob[,2])
+plot(roc_obj, main="ROC Curve for Optimal KNN Model")
+```
+
+**Tree model**
+
+Advanced DT model, somehow it's a boosting approach 
+
+```{r}
+# Hyper-parameter search -------------------------------------------------------
+# .winnow; feature selection step conducted before modelling
+# .trial; number of boosting iterations
+c50_grid <- expand.grid( .winnow = c(TRUE, FALSE), 
+                         .trials=c(1, 5, 4),
+                         .model= "tree"
+                         )
+
+# Training the model -----------------------------------------------------------
+c50_fit <- train(class ~., 
+                 method = "C5.0",
+                 data = training_transf,
+                 tuneGrid = c50_grid,
+                 metric = "Accuracy",
+                 trControl = ctrl)
+
+print(c50_fit)
+# Best values: trials = 1, model = tree and winnow = FALSE.
+
+# Predictions -----------------------------------------------------------------
+c50_pred = predict(c50_fit, X_test)
+c50_pred_prob = predict(c50_fit, X_test, type = "prob")
+# REVIEW: With prob predictions, we can vary the threshold
+
+# Performance measures ---------------------------------------------------------
+confusionMatrix(c50_pred, y_test)
+```
+
+```{r}
+# Plot tuning hyper-parameter --------------------------------------------------
+plot(c50_fit, main = 'Hyper-parameter tuning - Decision tree')
+
+# Plot importance on training --------------------------------------------------
+c50_var_imp <- varImp(c50_fit, scale=FALSE)
+plot(c50_var_imp, main="Variable importance for Decision Tree")
+
+# DT visualization -------------------------------------------------------------
+# TODO: implement this?
+
+# Plot testing performance -----------------------------------------------------
+# Convert the test set and predictions into a suitable dataframe for ggplot
+c50_test_plot <- data.frame(
+  Individual = seq_along(y_test),
+  Probability_CKD = c50_pred_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+ggplot(data = c50_test_plot, aes(x = Individual, 
+                                 y = Probability_CKD, 
+                                 color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Probability of class with C.50") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+
+# ROC --------------------------------------------------------------------------
+roc_obj <- roc(y_test, svm_pred_prob[,2])
+plot(roc_obj, main="ROC Curve for Optimal KNN Model")
+```
+
+### Random Forests
+
+
+
+
+### Gradient Boosting
 
 X-gradiend boosting
 
 ```{r eval=FALSE}
 # Tuning grid ------------------------------------------------------------------
+# https://csantill.github.io/RTuningModelParameters/
 xgb_grid = expand.grid(
   nrounds = c(500,1000),
   eta = c(0.01, 0.001), # c(0.01,0.05,0.1)
@@ -828,24 +1030,6 @@ EconomicProfit <- function(data, lev = NULL, model = NULL)
   out
 }
 ```
-
-
-
-# Comparison between models
-
-```{r}
-
-
-# Adjust the prediction call to obtain probabilities
-knn_pred_prob = predict(knn_fit, X_test, type = "prob")
-
-# Assuming the positive class is "ckd" and it's the second column of the probabilities
-# This will depend on how your factor levels are ordered in `y_test`
-roc_curve <- roc(response = y_test, predictor = knn_pred_prob[,2])
-
-plot(roc_curve, main = "ROC Curve for KNN Model")
-```
-
 
 \pagebreak
 # References
