@@ -733,8 +733,8 @@ ggplot(data = kkn_test_plot, aes(x = Individual,
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
 # ROC --------------------------------------------------------------------------
-roc_obj <- roc(y_test, knn_pred_prob[,2])
-plot(roc_obj, main="ROC Curve for Optimal KNN Model")
+roc_knn <- roc(y_test, knn_pred_prob[,2])
+plot(roc_knn, main="ROC Curve for Optimal KNN Model")
 ```
 
 ## Support Vector Machines
@@ -811,8 +811,8 @@ ggplot(data = svm_test_plot, aes(x = Individual,
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
 # ROC --------------------------------------------------------------------------
-roc_obj <- roc(y_test, svm_pred_prob[,2])
-plot(roc_obj, main="ROC Curve for Optimal KNN Model")
+roc_svm <- roc(y_test, svm_pred_prob[,2])
+plot(roc_svm, main="ROC Curve for Optimal KNN Model")
 ```
 
 ## Decision trees, Random Forests, Gradient Boosting
@@ -841,7 +841,7 @@ rpart_fit <- train(class ~.,
 print(rpart_fit)
 # Best values: cp = 0.01
 
-# Predictions -----------------------------------------------------------------
+# Predictions --------------------------------------------Z---------------------
 rpart_pred = predict(rpart_fit, X_test)
 rpart_pred_prob = predict(rpart_fit, X_test, type = "prob")
 # REVIEW: With prob predictions, we can vary the threshold
@@ -889,8 +889,8 @@ ggplot(data = rpart_test_plot, aes(x = Individual,
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
 # ROC --------------------------------------------------------------------------
-roc_obj <- roc(y_test, rpart_pred_prob[,2])
-plot(roc_obj, main="ROC Curve for Optimal KNN Model")
+roc_rpart <- roc(y_test, rpart_pred_prob[,2])
+plot(roc_rpart, main="ROC Curve for Optimal KNN Model")
 ```
 
 **Tree model**
@@ -958,14 +958,122 @@ ggplot(data = c50_test_plot, aes(x = Individual,
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
 # ROC --------------------------------------------------------------------------
-roc_obj <- roc(y_test, svm_pred_prob[,2])
-plot(roc_obj, main="ROC Curve for Optimal KNN Model")
+roc_c50 <- roc(y_test, svm_pred_prob[,2])
+plot(roc_c50, main="ROC Curve for Optimal KNN Model")
 ```
 
 ### Random Forests
 
+Random forest are a more advanced tools of DTs
+It also reduces overtting: for each node of the tree, consider only a random subset of predictors, m < p, for instance m = sqrt(p).
+
+How it works?
+1. Draw B bootstrap samples of size n: a decision tree for each bootstrap sample
+2. Grow each tree, by selecting a random set of m (out of p) features at each node, and choosing the best feature to split on
+3. Regression: Aggregate the predictions of the trees to produce the final prediction.
+
+Thus, `caret` library only allow to tune the `mtry` parameter I want to illustrate that it is possible to search for other parameters by coding manually the search. On this model, the search has been expanded for `ntree` parameter.
+
+```{r}
+# Hyper-parameter search -------------------------------------------------------
+# mtry; nº of variables randomly choose for bulding the trees
+# Common practice for the grid is [1, sqrt(n_variables)]
+rf_grid <- expand.grid(mtry = c(1, 2, 3, 4, 5))
+
+# Training the model -----------------------------------------------------------
+rf_fit <- train(class ~.,
+                method = "rf",
+                data = training_transf,
+                ntree = 200,
+                tuneGrid = rf_grid,
+                metric = "Accuracy",
+                trControl = ctrl)
+
+print(rf_fit)
+# Best values: mtry = 2
+
+# Try manually different ntree parameters --------------------------------------
+model_rf_list <- list()
+testing_ntree_var <- seq(200, 1000, by = 100)
+
+for (ntree in testing_ntree_var){
+  fit <- train(class~.,
+               method = 'rf',
+               data = training_transf,
+               ntree = ntree,
+               tuneGrid = rf_grid,
+               metric = 'Accuracy',
+               trControl = ctrl)
+  key <- toString(ntree)
+  model_rf_list[[key]] <- fit
+}
+
+results_rf_manually <- resamples(model_rf_list)
+#summary(results_rf_manually)
+# Best values: ntree = 1000
+dotplot(results_rf_manually)
+
+# Final search with ntree=1000
+rf_fit_final <- train(class ~.,
+                method = "rf",
+                data = training_transf,
+                ntree = 1000,
+                tuneGrid = rf_grid,
+                metric = "Accuracy",
+                trControl = ctrl)
+
+print(rf_fit_final)
 
 
+# Predictions ------------------------------------------------------------------
+rf_predF = predict(rf_fit_final, X_test)
+rf_predF_prob = predict(rf_fit_final, X_test, type = "prob")
+# REVIEW: With prob predictions, we can vary the threshold
+
+# Performance measures ---------------------------------------------------------
+confusionMatrix(rf_predF, y_test)
+```
+
+library(pdp) this library allow us to see the dependencies/Relation between variables. For example, we see with the first line of code that the dependency is not-lineal.
+In LR the relation was a line, and it was capable to capture this relation.
+
+```{r warning=FALSE, message=FALSE}
+# Plot tuning hyper-parameter --------------------------------------------------
+plot(rf_fit_final, main = 'Hyper-parameter tuning - Random Forest')
+
+# Plot importance on training --------------------------------------------------
+rf_var_imp <- varImp(rf_fit_final, scale=FALSE)
+plot(rf_var_imp, main="Variable importance for Random Forest")
+
+# Explore the relationship of the most important variable
+library(pdp)
+partial(rf_fit_final, pred.var = "hemo", which.class=2, plot = TRUE, prob=TRUE, rug = TRUE)
+# Se pueden analizar más
+
+# Plot testing performance -----------------------------------------------------
+# Convert the test set and predictions into a suitable dataframe for ggplot
+rf_test_plot <- data.frame(
+  Individual = seq_along(y_test),
+  Probability_CKD = rf_predF_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+ggplot(data = rf_test_plot, aes(x = Individual, 
+                                 y = Probability_CKD, 
+                                 color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Probability of class with RF") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+
+# ROC --------------------------------------------------------------------------
+roc_rf <- roc(y_test, rf_predF_prob[,2])
+plot(roc_rf, main="ROC Curve for Optimal RF Model")
+```
 
 ### Gradient Boosting
 
