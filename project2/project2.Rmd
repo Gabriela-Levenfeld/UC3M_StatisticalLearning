@@ -26,41 +26,75 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Dataset description.
 
-Dataset obtained from **UC Irvine Machine Learning Repository** [@misc_chronic_kidney_disease_336].
+The dataset used for developed this project is concerning chronic kidney disease and it is available on *UC Irvine Machine Learning Repository* [@misc_chronic_kidney_disease_336]. It contains medical data and laboratory parameters from $400$ patients, distributed across $24$ variables including blood pressure, potassium or appetite, among others.
 
 ## Variables description.
-**Quantitative**
-bp		-	Blood pressure
-bgr		-	Blood glucose random
-bu		-	Blood urea
-sc		-	Serum creatinine
-sod		-	Sodium
-pot		-	Potassium
-hemo	-	Hemoglobin
-pcv		- Packed cell volume
-wbcc	-	White blood cell count
-rbcc	-	Red blood cell count
 
-**Qualitative, Categorical**
-All this $3$ variables has a order.
-sg		-	Specific gravity
-al		- Albumin
-su		-	Sugar
+The information contained in the dataset can be classify based on its data type:
 
-**Qualitative, Binary**
-rbc		-	Red blood cells
-pc		-	Pus cell
-pcc		-	Pus cell clumps
-ba		-	Bacteria
-htn		-	Hypertension
-dm		-	Diabetes mellitus
-cad		-	Coronary artery disease
-appet	-	Appetite
-pe		-	Pedal edema
-ane		-	Anemia
+**Quantitative**.
 
-**Target**
-class	-	class
+- `age`; Age of the patient in years
+
+- `bp`; Blood pressure (in mm/Hg).
+
+- `bgr`; Blood glucose random (in mgs/dl).
+
+- `bu`;	Blood urea (in mgs/dl).
+
+- `sc`; Serum creatinine (in mgs/dl).
+
+- `sod`; Sodium (mEq/L).
+
+- `pot`; Potassium (mEq/L).
+
+- `hemo`; Hemoglobin (gms).
+
+- `pcv`; Packed cell volume.
+
+- `wbcc`; White blood cell count (cells/cumm).
+
+- `rbcc`; Red blood cell count (millions/cmm).
+
+**Qualitative, Categorical**. *Variables with order.*
+
+- `sg`; Specific gravity (possible levels: 1.005,1.010,1.015,1.020,1.025)
+
+- `al`; Level of albumin (possible levels: 0,1,2,3,4,5).
+
+- `su`; Level of sugar (possible levels: 0,1,2,3,4,5).
+
+**Qualitative, Binary**.
+
+- `rbc`; Whether the red blood cells is normal or abnormal.
+
+- `pc`; Whether the pus cell is normal or abnormal.
+
+- `pcc`; Presence of pus cell clumps.
+
+- `ba`; Whether there the patient has a bacteria or not.
+
+- `htn`; Presence of hypertension.
+
+- `dm`; Presence of diabetes mellitus.
+
+- `cad`; Presence of coronary artery disease.
+
+- `appet`; Whether the appetite of the patient is good or poor.
+
+- `pe`; Presence of pedal edema.
+
+- `ane`; Presence of anemia.
+
+**Target**.
+
+- `class`; Indicates the presence (ckd) or absence (notckd) of chronic kidney disease.
+
+## Goal.
+
+By analyzing the dataset, the idea is to identify the key factors that allow to detect the presence of chronic kidney disease. This prediction task is a binary classification problem where the goal is to forecast one of the two possible outcomes: ckd (presence of the disease) or notckd (absence of the disease).
+
+Such insights enable to develop strategies to prevent the progression of the disease and improve the quality of life for the affected patients.
 
 \pagebreak
 # Data preprocessing
@@ -81,7 +115,6 @@ library(VIM) # Plots for imputation perfoormance
 library(GGally) # Plots of the continuous variables
 library(psych) # Compute the skewness and correlation matrix
 library(polycor) # Compute correlation heatmap mix data type
-#library(patchwork) # Plot grid
 library(gridExtra) # For grid.arrange
 library(corrplot) # Correlation matrix
 library(reshape2) # Data reshaping (melt)
@@ -137,7 +170,9 @@ glimpse(data)
 
 ## Data cleaning and Feature engineering.
 
-**Ensure consistency on the dataset**. Missing values are represented sometimes as "?" and other times as NA. To ensure consistency over the whole data, it is converted all missing values into the same format. 
+**Ensure dataset consistency**.
+
+The dataset contains missing values represented as "?" as well as "NA". To ensure consistency over the data, all missing values are converted to the same format, making easier future handling.
 
 ```{r consistency_dataset}
 # Convert "?" to NA
@@ -145,13 +180,17 @@ data <- data.frame(lapply(data, function(x) ifelse(x == "?", NA, x)))
 ```
 
 
-**Duplicate data**. There is no duplicated data.
+**Duplicate data**.
+
+There is no duplicated data, each row represent a different patient.
 
 ```{r duplicate_data}
 duplicates <- data[duplicated(data), ]
 ```
 
-**Encoding qualitative variables**. The goal is to get a dataset that our statistical models knows how to manage. This include, turn it into factor the categorical variables. Meanwhile, binary encoding is easy, for the multi-state variables strategy is slightly different due to the presence of natural order. This means, that a higher lever of this variables are directly relevant for medical conditions, clearly affecting to medical conditions such as chronic kidney disease. This variables `sg`, `al` and `su` represent the specific gravity, albumin and sugar. In order to make the proper encoding, it is mandatory to specify the importance of the order when creating this levels using the factor function.
+**Encoding qualitative variables**.
+
+The goal is to get a dataset that our machine learning models know how to manage. This include, turn it into factor the categorical variables. Meanwhile, binary encoding is easy, for the multi-state variables strategy is slightly different due to the presence of natural order. This variables `sg` (specific gravity), `al` (albumin) and `su` (sugar), represent different ordered levels of severity or concentration that have impact on medical conditions, such as chronic kidney disease. In order to make the proper encoding, it is mandatory to specify the importance of the order when creating this levels using the factor function.
 
 ```{r data_cleaning, results='hide'}
 # Binary variables -------------------------------------------------------------
@@ -176,10 +215,12 @@ data$su <- factor(data$su,
 # Checkings --------------------------------------------------------------------
 str(data) # To check all qualitative vars are in factor type
 levels(data$sg) # Check the levels of a specific variable
-table(data$al) # Check how many observation per level there is
+table(data$al) # Check how many observation per level there are
 ```
 
-**Drop categories on `al` and `su`**. `al` level $5$ contains just one observation, due to its low presence on the dataset it can be changed into level $4$ gaining stability and avoiding possible futures problems when imputing missing values. Same startegy is followed on `su` $4$ level. This approach assumes that the distinction between levels $4$ and $5$ is not significant.
+**Drop categories**.
+
+When analysing `al` and `su` parameters, it can be observed that level $5$ in both variables contains just one observations. This issue can introduced instability as well as future problem in missing value imputation. To address this, observations in these levels are merged into level $4$, under the assumption that the distinction between these levels is not really significantly.
 
 ```{r}
 table(data$sg)
@@ -212,25 +253,26 @@ table(data$su)
 
 ## Identify missing data.
 
-Next step focus on identify missing values on the dataset that can be due to typo errors, absence of this patient answers, etc.
+Next step focus on identify missing values on the dataset that can be due to various factors such as typo errors or unreported patient information.
 
-This dataset contains missing values, we must handle them in order to use the models (not all models support NA's). The above table shows the missing values by columns express in percentage. None of this variables superan a threshold of $60$% of missing values thus it is recommend to not delete any variable avoiding loosing this information.
+This dataset contains some missing values and, their must be handled in order to use all machine learning model proposed during lecture. The main reason is that not all models support NA's. The below table shows the missing values by columns express in percentage. Because none of this variables exceed a threshold of $60$% of missing values, it is recommend to not delete any variable avoiding loosing this information.
 
 ```{r counting_NAs}
-total_na <- sum(is.na(data)) # 1012 NA
+total_na <- sum(is.na(data)) # 1012 NAs
 
-# Counting NA's ----------------------------------------------------------------
+# Counting and sorting NA's
 missing_values <- colSums(is.na(data))
 sort_missing_values <- sort(missing_values, decreasing = TRUE)
 
-percentage_na <- missing_values/nrow(data)*100 # NA's in %
+# Counting and sorting NA's, display results in %
+percentage_na <- missing_values/nrow(data)*100
 sort(percentage_na, decreasing = TRUE)
 ```
 
-**Delete patient information**. First approach is to take a look if there is a chance that data from a patient has not been well reported. There are $10$ observations that has $7$ columns with invalid data. These rows are deleted, there is no sense on make up around the $45.83$% of information of a patient.
+First approach is to check if a patient record has not been well reported. It has been found $7$ observations where $11$ columns contains invalid data. These records are removed because, approximately, $45.83$% information of the patient is missing. Maintaining such rows would required data fabrication and will directly affect the future analysis making it weaken.
 
 ```{r rm_rows}
-# All observations with at least 1 NA ------------------------------------------
+# Identifying observations with at least 1 NA ----------------------------------
 obvs_with_na <- data[rowSums(is.na(data)) > 0, ]
 missing_counts <- rowSums(is.na(obvs_with_na))
 
@@ -265,6 +307,10 @@ nrow(testing) # Number of observation for testing
 
 ## Handling missing data.
 
+In this section, we cover the imputation of the missing data in the dataset using the MICE technique. This method is provided by the R library `mice` [@mice_ref] and on this script, we apply a slightly different version that allow us dealing with training and testing sets for avoiding data leakage.
+
+Some important consideration on the configuration of this process are the election of 'rf' (random forest) method across all variables, in order to handle possible non-linear relationships. Moreover, we generate $4$ imputations for the training set. However, for this project, we will only consider the first imputation. After generating the imputed data in the training set, we can complete the missing values using the `complete()` function, which fills in missing values with those from the first imputation. Finally, and where we modify the classic version, we apply `mice.reuse()` function [@miceReuse_ref] which let us to impute the missing values in the testing set while avoiding data leakage. This function use the model developed from the training imputation and apply it on the testing set, thus ensuring greater reliability in the imputation of values through the use of learned patterns.
+
 ```{r mice_imputation, warning=FALSE, message=FALSE, results='hide'}
 # MICE Imputation --------------------------------------------------------------
 meth <- rep("rf", length = ncol(training)) # Set all methods to RF model
@@ -275,19 +321,21 @@ mice_model <- mice(training,
                    seed = 1234, print = FALSE
                    )
 
-# Complete the train data with the first imputation
+# Complete the TRAIN data with the first imputation
 training_imp <- complete(mice_model, 1)
 
 # Function to impute new observations based on the previous imputation model
 source("https://raw.githubusercontent.com/prockenschaub/Misc/master/R/mice.reuse/mice.reuse.R")
 
-# Apply the imputation model to the testing set and extract the first imputation
+# Apply the imputation model to the TESTING set and extract the first imputation
 testing_imp <- mice.reuse(mice_model, testing, maxit = 1)[[1]]
 ```
 
-**Perform diagnostics of how the imputation is working**.
+**Performance diagnostic of how the imputation is working**.
 
-```{r performance_mice1, fig.align='center', fig.height=3, fig.width=4}
+To check there are no missing data anymore, we use a graph from the `library(VIM)` [@VIM_ref], which display the percentage of NA's.
+
+```{r performance_mice1, echo=FALSE, fig.align='center', fig.height=3, fig.width=4}
 # Plot 1: Represent the % of missing data
 aggr(training_imp,
      col = c("navyblue", "yellow"),
@@ -300,11 +348,16 @@ aggr(training_imp,
 )
 ```
 
+Also, to assess whether the imputed data adequately reflects the distributions of the original data, we can use the `densityplot()` function. This function shows the marginal distribution of the observed data in blue, and in red, it shows the four densities for the predictors with initially missing data. As we can observed, the distributions across all variables fit properly following the original distribution. Hence, we can ensure the good quality of the MICE model for handling NAs.
 
-```{r performance_mice2, fig.align='center', fig.height=4, fig.width=5}
+```{r performance_mice2, echo=FALSE, fig.align='center', fig.height=4, fig.width=5}
 # Plot 2: Check it follows the distribution of the original variable
 densityplot(mice_model)
+```
 
+Finally, we can deeper explore the distribution of the imputed values across the first four imputations, compared to the observed data (represented by imputation number $0$). The red points are the imputed values which are consistently clustered across all iteration, suggesting again that the MICE algorithm is a reliable performance. Furthermore, this plot demonstrated how well the first distribution (the one we have chosen) is working.
+
+```{r performance_mice3, echo=FALSE, fig.align='center', fig.height=4, fig.width=5}
 # Plot 3: Visualize the imputed values for the 'age' variable across multiple imputations
 # https://www.gerkovink.com/miceVignettes/Convergence_pooling/Convergence_and_pooling.html
 stripplot(mice_model, pch = 19, xlab = "Imputation number")
@@ -319,7 +372,7 @@ The aim is to uncover patterns, detect outliers, and test assumptions through vi
 
 The `ggpair` function from the GGally package [@GGally_ref], allow us to create a scatter plot matrix for this variables. This matrix includes histograms for each variable along the diagonal, showcasing their distribution. The lower triangle displays scatter plots to explore the relationships between variable pairs, while the upper triangle shows the correlation coefficients, providing a quantitative measure of their relationships. This information allow us to identify the shape distribution, tendencies, outliers, among other things, thanks to different views in one grid.
 
-```{r scatterPlot_contiuous, fig.align='center', message=FALSE, warning=FALSE}
+```{r scatterPlot_contiuous, echo=FALSE, fig.align='center', message=FALSE, warning=FALSE}
 # Select continuous variables (include target)
 scatterPlot_data <- training_imp[, c("bp", "bgr", "bu", "sc", "sod", "pot", "hemo", "pcv", "wbcc", "rbcc", "class")]
 
@@ -346,13 +399,13 @@ pander(result_df)
 
 2. Standardization of Data. The data will be standardized to benefit models that are sensitive to the scale of the data, such as *K-Nearest Neighbors* and *Neural Networks*. This step will not affect negatively to the other models like *Gradient Boosting*, which are less sensitive to scaling.
 
-3. About correlation coefficients. It is worth mentioning that this dataset contains high correlation between some variables, this value is identify when coefficients are grater than $>0.7$ or lower than $< -0.7$). For instance, packed cell volume (`pcv`) and hemoglobin (`hemo`) have a strong positive correlation coefficient of $0.869$. From a biologically point of view makes sense, both parameter are related with the amount of oxygen going through human blood. Hemoglobin is the protein in red blood cells that carries oxygen, while the packed cell volume represents the volume percentage of red blood cells in blood. Moreover, red blood cells count (`rbcc`) is also highly correlated with `hemo` ($0.770$) and `pcv` ($0.766$) indicating that if one of this parameter increase the other one will increase too.
+3. About correlation coefficients. It is worth mentioning that this dataset contains high correlation between some variables, this value is identify when coefficients are grater than $0.7$ or lower than $-0.7$). For instance, packed cell volume (`pcv`) and hemoglobin (`hemo`) have a strong positive correlation coefficient of $0.869$. From a biologically point of view makes sense, both parameter are related with the amount of oxygen going through human blood. Hemoglobin is the protein in red blood cells that carries oxygen, while the packed cell volume represents the volume percentage of red blood cells in blood. Moreover, red blood cells count (`rbcc`) is also highly correlated with `hemo` ($0.770$) and `pcv` ($0.766$) indicating that if one of this parameter increase the other one will increase too.
 
 4. Outliers. It is notably the presence of some outliers over the variables. This observations (referring to the outliers) represent individuals with extreme values probably due to underlying medical conditions or measurement errors. Notice that this observations may influence directly the model performance and the conclusion derived from the data analysis.
 
 **Relation with the output**. A deeper exploration of the most correlated variables with the target, `class`, let some important insights on identify chronic kidney disease and healthy patients. First pattern obtained is that people with chronic kidney disease (class = `ckd`) tend to have lower values of hemoglobin (`hemo`), packed cell volume (`pcv`), and red blood cell count (`rbcc`) as indicated by the red density distributions. In contrast, healthy patients (class = `notckd`) have higher values for these parameters, as shown by blue density distribution. Moreover, boxplots demonstrated same insight as before, with median values of `hemo`, `pcv`, and `rbcc` being lower in the chronic kidney disease group. Last distinction observed on the boxplots is about on how the outliers exist just on unhealthy people distribution. This situation might highlight the complexity for diagnosis and identifying the chronic kidney disease due to weird and unexpected behavior of this patients. 
 
-```{r deeperExploration, warning=FALSE, message=FALSE, fig.align='center'}
+```{r deeperExploration, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
 deeperExploration_vars <- training_imp[, c("hemo", "pcv", "rbcc", "class")]
 
 # Most correlate variables separate by target
@@ -398,7 +451,7 @@ testing_transf[c("bp", "bgr", "bu", "sc", "sod", "pot", "hemo", "pcv", "wbcc", "
 
 **Binary variables**. 
 
-Some tables are display in order to understand better the dataset.
+Some tables are display in order to understand better the dataset. 
 First table indicates that most of the patients have normal levels of red blood cells (`rbc`) and pus cell (`pc`). In the second table, the majority of data is regarding people without pus cell clumps (`pcc`) and bacteria (`ba`). The third table focus on various conditions, including hypertension (`htn`), diabetes mellitus (`dm`), coronary artery disease (`cad`), pedal edema (`pe`), and anemia (`ane`). Hypertension and diabetes mellitus seems as the more common conditions among the patients. Meanwhile the other parameters are present in no more than $19$% of the people tested, thus these conditions might not be commontly within the population. Finally, most people of the dataset report having a good appetite.
 In summary, the binary variables are not equally distributed on this dataset.
 
@@ -548,7 +601,7 @@ ggplot(category_data, aes(x = value, fill = class)) +
 
 The heatmap represents the strength and direction of the relationships between the variables in the dataset, where the color intensity indicates the magnitude of the correlation. Dark colors, that can be either blue (positive) or red (negative), suggest a stronger relationship between variables. A positive coefficient means that an increase (or decrease) in one variable is associated with an increase (or decrease) in the other. Conversely, a negative correlation indicated that as one variables increase, the other decrease. And, color in the middle are interpreted as weak correlations.
 
-For dealing with mixed data type, the `hetcor` function from the `psych` [@psych_ref] package in R is used. This enable the computation of correlation across numeric, binary and multi-state variables as long as the qualitative variable are represented in factors. When coding this step some inconveniences have been encountered with `al` and `htn` variables. To address this issue, both parameters are treated numerically to facilitate its computation in the correlation analysis.
+For dealing with mixed data type, the `hetcor` function from the `psych` package [@psych_ref] in R is used. This enable the computation of correlation across numeric, binary and multi-state variables as long as the qualitative variable are represented in factors. When coding this step some inconveniences have been encountered with `al` and `htn` variables. To address this issue, both parameters are treated numerically to facilitate its computation in the correlation analysis.
 
 ```{r corr_heatmap, warning=FALSE, message=FALSE, fig.align='center'}
 training_modify <- training_transf
@@ -570,7 +623,7 @@ corrplot(cor_values, method="color", type="upper", order="hclust",
 
 Thanks to this exploration $17$ strong relationships have been discovered (the threshold for filter the correlations is set to coefficients higher than $0.7$ or lower than $-0.7$). However, I decided to focus on the top $8$ with the most significant impact, which can seen on the below table.
 
-Most of this relationships are kind of intuitive. For example, having diabetes is closely linked to higher sugar levels, and a lower amount of hemoglobin seems to be associated with anemia. Overall, it is realised how related metabolomic and blood measures are when identifying chronic kidney disease,
+Most of this relationships are kind of intuitive. For example, having diabetes is closely linked to higher sugar levels, and a lower amount of hemoglobin seems to be associated with anemia. Overall, it is realised how related metabolomic and blood measures are when identifying chronic kidney disease.
 
 ```{r}
 cor_flat <- as.data.frame(as.table(cor_values))
@@ -672,7 +725,7 @@ c50_fit <- readRDS("pretrained_models/c50_fit.rds")
 # RF model ---------------------------------------------------------------------
 rf_fit_final <- readRDS("pretrained_models/rf_fit_final.rds")
 # GB model ---------------------------------------------------------------------
-
+xgb_fit <- readRDS("pretrained_models/xgb_fit.rds")
 # NN model ---------------------------------------------------------------------
 nn_fit <- readRDS("pretrained_models/nn_fit.rds")
 # DNN model ---------------------------------------------------------------------
@@ -1125,7 +1178,7 @@ plot(roc_rf, main="ROC Curve for Optimal RF Model")
 xgb_grid = expand.grid(
   nrounds = c(100, 500),
   eta = c(0.01, 0.1), # Learning rate
-  max_depth = c(3, 6),  # Tree depth
+  max_depth = c(3, 6), # Tree depth
   gamma = c(0, 1),
   colsample_bytree = c(0.5, 0.8), # Feature sampling
   min_child_weight = c(1, 5),
@@ -1142,7 +1195,10 @@ xgb_fit = train(class ~.,
                 )
 
 print(xgb_fit)
-# Best values: Fitting nrounds = 500, max_depth = 6, eta = 0.01, gamma = 0, colsample_bytree = 0.5, min_child_weight = 1, subsample = 0.9 on full training set
+# Best values: nrounds = 100, max_depth = 6, eta = 0.1, gamma = 1, colsample_bytree = 0.8, min_child_weight = 1 and subsample = 0.9
+
+# Save model -------------------------------------------------------------------
+saveRDS(xgb_fit, file="pretrained_models/xgb_fit.rds")
 
 # Predictions -----------------------------------------------------------------
 xgb_pred = predict(xgb_fit, X_test)
@@ -1294,17 +1350,17 @@ roc_dnn <- roc(y_test, dnn_pred_prob[,2])
 plot(roc_dnn, main="ROC Curve for Optimal DNN Model")
 ```
 
+\pagebreak
 # Overview models
 
 ```{r}
-# TODO: Add GB model
-
 # Compare model performance ----------------------------------------------------
 models_compare <- resamples(list(KNN = knn_fit,
                                  SVM = svm_fit,
                                  DT.rpart = rpart_fit,
                                  DT.c50 = c50_fit,
                                  RF = rf_fit_final,
+                                 xGB = xgb_fit,
                                  NN = nn_fit,
                                  DNN = dnn_fit)
                             )
