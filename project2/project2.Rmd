@@ -652,14 +652,16 @@ modelLookup(name_caret_model)
 ```
 
 
-```{r eval=FALSE, include=FALSE}
+```{r folder_pretrain_mod, eval=FALSE}
 # Specify the folder path
 folder_path <- "pretrained_models"
 # Create the folder if it doesn't exist
 if (!dir.exists(folder_path)) {
   dir.create(folder_path)
 }
+```
 
+```{r eval=FALSE, include=FALSE}
 # KNN model --------------------------------------------------------------------
 knn_fit <- readRDS("pretrained_models/knn_fit.rds")
 # SVM model --------------------------------------------------------------------
@@ -672,7 +674,9 @@ rf_fit_final <- readRDS("pretrained_models/rf_fit_final.rds")
 # GB model ---------------------------------------------------------------------
 
 # NN model ---------------------------------------------------------------------
-nn_fit <- readRDS(nn_fit, file="pretrained_models/nn_fit.rds")
+nn_fit <- readRDS("pretrained_models/nn_fit.rds")
+# DNN model ---------------------------------------------------------------------
+dnn_fit <- readRDS("pretrained_models/dnn_fit.rds")
 ```
 
 ## k-Nearest Neighbors
@@ -1149,7 +1153,6 @@ xgb_pred_prob = predict(xgb_fit, X_test, type = "prob")
 confusionMatrix(xgb_pred, y_test)
 ```
 
-
 ## Neural Networks
 
 ```{r warning=FALSE, message=FALSE}
@@ -1217,10 +1220,106 @@ ggplot(data = nn_test_plot, aes(x = Individual,
 
 # ROC --------------------------------------------------------------------------
 roc_nn <- roc(y_test, nn_pred_prob[,2])
-plot(roc_svm, main="ROC Curve for Optimal NN Model")
+plot(roc_nn, main="ROC Curve for Optimal NN Model")
 ```
 
+## Deep Neural Network
 
+```{r warning=FALSE, message=FALSE}
+# Hyper-parameter search -------------------------------------------------------
+# layer1, layer2, layer3: nº of neuron in each hidden layers
+dnn_grid <- expand.grid(layer1 = c(5, 10, 15),
+                        layer2 = c(0, 5, 10),
+                        layer3 = c(0, 5),
+                        hidden_dropout = c(0.1, 0.2), #dense neuron network
+                        visible_dropout = c(0.1, 0.2))
+# dim(dnn_grid) # 72 combinations
+
+# Training the model -----------------------------------------------------------
+# NN with 1 hidden layer
+dnn_fit <- train(class ~.,
+                method = "dnn",
+                data = training_transf,
+                numepochs = 20, # nº of iterations on the whole training set
+                tuneGrid = dnn_grid,
+                metric = "Accuracy",
+                trControl = ctrl)
+
+print(dnn_fit)
+# Best values:
+
+# Save model -------------------------------------------------------------------
+saveRDS(dnn_fit, file="pretrained_models/dnn_fit.rds")
+
+# Predictions -----------------------------------------------------------------
+dnn_pred = predict(dnn_fit, X_test)
+dnn_pred_prob = predict(dnn_fit, X_test, type = "prob")
+# REVIEW: With prob predictions, we can vary the threshold
+
+# Performance measures ---------------------------------------------------------
+confusionMatrix(dnn_pred, y_test)
+```
+
+```{r}
+# Plot tuning hyper-parameter --------------------------------------------------
+plot(dnn_fit)
+
+# Plot importance on training --------------------------------------------------
+dnn_var_imp <- varImp(dnn_fit, scale = FALSE)
+plot(dnn_var_imp,
+     scales = list(y = list(cex = .95)), 
+     main="Variable importance for Deep Neural Netwrok")
+
+# Plot testing performance -----------------------------------------------------
+# Convert the test set and predictions into a suitable dataframe for ggplot
+dnn_test_plot <- data.frame(
+  Individual = seq_along(y_test),
+  Probability_CKD = dnn_pred_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+ggplot(data = dnn_test_plot, 
+       aes(x = Individual, y = Probability_CKD, color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Probability of class with DNN") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+
+# ROC --------------------------------------------------------------------------
+roc_dnn <- roc(y_test, dnn_pred_prob[,2])
+plot(roc_dnn, main="ROC Curve for Optimal DNN Model")
+```
+
+# Overview models
+
+```{r}
+# TODO: Add GB model
+
+# Compare model performance ----------------------------------------------------
+models_compare <- resamples(list(KNN = knn_fit,
+                                 SVM = svm_fit,
+                                 DT.rpart = rpart_fit,
+                                 DT.c50 = c50_fit,
+                                 RF = rf_fit_final,
+                                 NN = nn_fit,
+                                 DNN = dnn_fit)
+                            )
+
+# Summary
+summary(models_compare)
+
+# Box-and-Whisker Plot
+bwplot(models_compare, metric = "Accuracy",
+       main = "Model comparison based on Accuracy")
+
+# Dotplot
+dotplot(models_compare, metric = "Accuracy",
+        main = "Model Comparison based on Accuracy")
+```
 
 \pagebreak
 # Social impact
