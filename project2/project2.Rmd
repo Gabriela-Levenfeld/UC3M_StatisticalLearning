@@ -733,7 +733,7 @@ k-Nearest Neighbors classifier, commonly known as kNN, looks at the closest trai
 
 The main parameter of kNN is $k$, which allow us to set the number of neighbors to consider for obtaining an optimal accuracy. After a search of this hyper-parameter, the best performance was achieved when $k = 3$, indicating that the model performs right when making predictions based on the three closest neighbors.
 
-```{r hide_train_knn, eval=FALSE, include=FALSE}
+```{r hide_train_knn, eval=FALSE}
 # Hyper-parameter search -------------------------------------------------------
 # K no more than 50% of the training set size.
 # From lecture: preferable to try odd numbers for k
@@ -803,13 +803,12 @@ plot(knn_var_imp, main="Variable importance for KNN")
 
 ## Support Vector Machines
 
-Well know as SVM, the idea is to maximize the gap between the two classes. This models works really nice for non-linear problems. The original sample is transformed into a higher space (using kernels: lineal, polinomial, gaussian (radial-basis), two-layer perceptron, etc.).
-Some advantages that make it think it can work properly for this dataset is that SVM is not influenced by outlier (that we have some) and does no make overfitting.
+Support Vector Machines, known also as SVM, is a classifier based on the idea of maximizing the gap between different classes. Kernel functions plays an important role on this models and works well with non-linear problems. Additionally, is not influenced by the presence of outliers which can be beneficial for this dataset and its well-known for reducing the risk of overfitting. In this analysis, we have utilized the *radial basis function kernel* in caret (`svmRadial`).
 
-```{r}
+```{r hide_train_svm, eval=FALSE}
 # Hyper-parameter search -------------------------------------------------------
 # C; compromising between low errors and weights values
-# sigma; determine how far the influence of a single training example reaches.
+# sigma; determine how far the influence of a single training example reaches
 svm_grid <- expand.grid(C =  c(1e-1, 1e0, 1e1, 1e2, 1e3, 1e4), 
                         sigma = c(0.01, 0.05, 0.1, 0.5, 1, 2, 5)
                         )
@@ -822,12 +821,14 @@ svm_fit <- train(class ~., method = "svmRadial",
                 trControl = ctrl)
 
 print(svm_fit)
-# Best values: sigma = 0.5 and C = 0.1
+# Best values: sigma = 0.5 and C = 1
 
 # Save model -------------------------------------------------------------------
 saveRDS(svm_fit, file="pretrained_models/svm_fit.rds")
+```
 
-# Predictions -----------------------------------------------------------------
+```{r conf_matrix_svm}
+# Predictions on test ----------------------------------------------------------
 svm_pred = predict(svm_fit, X_test)
 svm_pred_prob = predict(svm_fit, X_test, type = "prob")
 # REVIEW: With prob predictions, we can vary the threshold
@@ -836,10 +837,16 @@ svm_pred_prob = predict(svm_fit, X_test, type = "prob")
 confusionMatrix(svm_pred, y_test)
 ```
 
-**Performance of the model**
+The SVM model's performance reached incredible results metrics: an accuracy of $96.15$% and a kappa of $91.72$%, which represent almost a perfect model. The confusion matrix reveals that there has not been done any **worst mistake** (predicting the patient does not have chronic kidney disease when he actually has). However, there are a few times where the model forecast that the patient has ckd and in reality the patient is healthy.
 
-```{r svm_measures, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
-# Plot tuning hyper-parameter --------------------------------------------------
+**Performance of the model**.
+
+During the training phase, we conducted a hyper-parameter search to balance the trade-off between ensuring low error (parameter `C`) and managing the influence range of support vectors (`sigma`). From all values tried the model performs best with $sigma = 0.5$ and $C = 1$.
+
+The parameter search space plot, suggest that smaller values of sigma lead us into better models. Moreover, with the appropriate sigma it seems the choice of $C$ is less critial to the model's performance.
+
+```{r svm_measures1, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
+# Plot hyper-parameter tuning --------------------------------------------------
 selected_sigma_values <- unique(svm_fit$results$sigma)
 svm_results_filtered <- subset(svm_fit$results, sigma %in% selected_sigma_values)
 
@@ -852,34 +859,14 @@ ggplot(svm_results_filtered, aes(x=log10(C), y=Accuracy, color=factor(sigma))) +
   scale_color_discrete(name = "sigma") +
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5), legend.title = element_blank())
+```
 
+The variable importance plot highlights again hemoglobin (`hemo`) as the most significant variable when forecasting the presence or absence of chronic kidney disease. Other important parameters include packed cell volume (`pcv`), specific gravity (`sg`) or serum creatinine (`sc`). As an insight, SVM aligns with KNN in terms of the key variables, the only difference is in their ranking for `pe` and `rbc` variables.
+
+```{r svm_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 svm_var_imp <- varImp(svm_fit, scale=FALSE)
 plot(svm_var_imp, main="Variable importance for SVM")
-
-# Plot testing performance -----------------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
-svm_test_plot <- data.frame(
-  Individual = seq_along(y_test),
-  Probability_CKD = svm_pred_prob[,2],
-  Actual_Class = as.factor(y_test)
-)
-
-# Create the plot
-ggplot(data = svm_test_plot, aes(x = Individual, 
-                                 y = Probability_CKD, 
-                                 color = Actual_Class)) +
-  geom_point() +
-  theme_light(base_size = 14) +
-  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
-  xlab("Test observation") +
-  ylab("Probability of class with KNN") +
-  theme_minimal() +
-  geom_hline(yintercept = 0.5, linetype = "dashed")
-
-# ROC --------------------------------------------------------------------------
-roc_svm <- roc(y_test, svm_pred_prob[,2])
-plot(roc_svm, main="ROC Curve for Optimal KNN Model")
 ```
 
 ## Decision trees, Random Forests, Gradient Boosting
@@ -1378,6 +1365,29 @@ ggplot(data = kkn_test_plot, aes(x = Actual_Class,
   scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
   xlab("Test observation") +
   ylab("Probability of class with KNN") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+
+# SVM ROC ----------------------------------------------------------------------
+roc_svm <- roc(y_test, svm_pred_prob[,2])
+plot(roc_svm, main="ROC Curve for Optimal SVM Model")
+
+# SVM plot testing performance -------------------------------------------------
+# Convert the test set and predictions into a suitable dataframe for ggplot
+svm_test_plot <- data.frame(
+  Probability_Prob = svm_pred_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+ggplot(data = svm_test_plot, aes(x = Actual_Class, 
+                                 y = Probability_Prob, 
+                                 color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Probability of class with SVM") +
   theme_minimal() +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 ```
