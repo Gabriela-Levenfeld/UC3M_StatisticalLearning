@@ -119,6 +119,7 @@ library(gridExtra) # For grid.arrange
 library(corrplot) # Correlation matrix
 library(reshape2) # Data reshaping (melt)
 library(pROC)
+library(rattle) # Display DT diagrams
 ```
 
 **Load dataset**. The dataset was stored in an .arff format. To open the file, I made some arrangements using Python enviroment, I attached the code used in order to generate the .csv so I can work with during the rest of the project.
@@ -750,7 +751,7 @@ print(knn_fit)
 # Best values: k = 3
 
 # Save model -------------------------------------------------------------------
-saveRDS(knn_fit, file="pretrained_models/knn_fit.rds")
+saveRDS(knn_fit, file = "pretrained_models/knn_fit.rds")
 ```
 
 ```{r conf_matrix_knn}
@@ -798,7 +799,7 @@ The variable importance plot for the k-Nearest Neighbors model displays the rela
 ```{r knn_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 knn_var_imp <- varImp(knn_fit, scale=FALSE)
-plot(knn_var_imp, main="Variable importance for KNN")
+plot(knn_var_imp, main = "Variable importance for KNN")
 ```
 
 ## Support Vector Machines
@@ -824,14 +825,13 @@ print(svm_fit)
 # Best values: sigma = 0.5 and C = 1
 
 # Save model -------------------------------------------------------------------
-saveRDS(svm_fit, file="pretrained_models/svm_fit.rds")
+saveRDS(svm_fit, file = "pretrained_models/svm_fit.rds")
 ```
 
 ```{r conf_matrix_svm}
 # Predictions on test ----------------------------------------------------------
-svm_pred = predict(svm_fit, X_test)
-svm_pred_prob = predict(svm_fit, X_test, type = "prob")
-# REVIEW: With prob predictions, we can vary the threshold
+svm_pred <- predict(svm_fit, X_test)
+svm_pred_prob <- predict(svm_fit, X_test, type = "prob")
 
 # Performance measures ---------------------------------------------------------
 confusionMatrix(svm_pred, y_test)
@@ -866,95 +866,71 @@ The variable importance plot highlights again hemoglobin (`hemo`) as the most si
 ```{r svm_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 svm_var_imp <- varImp(svm_fit, scale=FALSE)
-plot(svm_var_imp, main="Variable importance for SVM")
+plot(svm_var_imp, main = "Variable importance for SVM")
 ```
 
-## Decision trees, Random Forests, Gradient Boosting
+## Models based on decision trees
 
 ### Decision trees
 
-In general, some advantages are: interpretability, automatic feature selection, less data cleaning (NAs and outliers). There is no existance of missing values, but there are some outliers this model can actually works really nice.
+In general, decision trees are well suited for dataset with missing values or outliers on it. Although this dataset not longer contains NA's, using decision trees can still be advantageous due to the presence of outliers in some of the variables. Furthermore, their ability for automatic feature selection make it easy its interpretability. For this kind of model we explore two options provided by the `caret` library.
 
-**rpart model**
+**RPART MODEL**. The RPART method, is a type of decision trees which offers simplicity and interpretability without supporting capability for boosting.
 
-Limited DT model, it does not support boosting option. 
-
-```{r}
+```{r hide_train_rpart, eval=FALSE}
 # Hyper-parameter search -------------------------------------------------------
 # cp; size of the tree
 rpart_grid <- expand.grid(.cp = c(0.01, 0.05, 0.1))
 
 # Training the model -----------------------------------------------------------
-rpart_fit <- train(class ~., 
-                 method = "rpart",
-                 data = training_transf,
-                 tuneGrid = rpart_grid,
-                 metric = "Accuracy",
-                 trControl = ctrl)
+rpart_fit <- train(class ~.,
+                   method = "rpart",
+                   data = training_transf,
+                   tuneGrid = rpart_grid,
+                   metric = "Accuracy",
+                   trControl = ctrl)
 
 print(rpart_fit)
 # Best values: cp = 0.01
 
 # Save model -------------------------------------------------------------------
-saveRDS(rpart_fit, file="pretrained_models/rpart_fit.rds")
+saveRDS(rpart_fit, file = "pretrained_models/rpart_fit.rds")
+```
 
-# Predictions ------------------------------------------------------------------
-rpart_pred = predict(rpart_fit, X_test)
-rpart_pred_prob = predict(rpart_fit, X_test, type = "prob")
-# REVIEW: With prob predictions, we can vary the threshold
+```{r conf_matrix_rpart}
+# Predictions on test ----------------------------------------------------------
+rpart_pred <- predict(rpart_fit, X_test)
+rpart_pred_prob <- predict(rpart_fit, X_test, type = "prob")
 
 # Performance measures ---------------------------------------------------------
 confusionMatrix(rpart_pred, y_test)
 ```
 
-```{r warning=FALSE, message=FALSE}
-# DT visualization -------------------------------------------------------------
-# REVIEW: Choose the second option, it is more visually appeling
-# plot the model
-plot(rpart_fit$finalModel, uniform=TRUE,
-     main="Classification Decision Tree")
-text(rpart_fit$finalModel, use.n.=TRUE, all=TRUE, cex=.8)
+The evaluation of this model with the testing set achieved almost a perfect mode where the accuracy is about $97.44$% and the kappa is $94.58$%. The model's confusion matrix revealed that the missclasification is minimum, with only two incorrect predictions (once for each type of error).
 
-suppressMessages(library(rattle))
+**Performance of the model**.
+
+Same accuracy and kappa metrics has been obtained across different complexity parameters (`cp`). Therefore, the visual representation of the tuning process is omitted as it does not enhance the understanding of the model's performance. Instead, I will focus on the decision tree diagram coding thanks to the `rattle` package [@rattle_ref]. This interesting plot, illustrate the decision-making process of the model. It start with hemoglobin as the primary node for splitting the data with a threshold of $0.17$. Then the second node, based it decision on `sg` variable.
+
+```{r rpart_measures1, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
+# DT visualization -------------------------------------------------------------
 fancyRpartPlot(rpart_fit$finalModel)
 
 # Plot tuning hyper-parameter --------------------------------------------------
-plot(rpart_fit, main = 'Hyper-parameter tuning - Decision tree')
-
-# Plot importance on training --------------------------------------------------
-rpart_var_imp <- varImp(rpart_fit, scale=FALSE)
-plot(rpart_var_imp, main="Variable importance for Decision Tree")
-
-# Plot testing performance -----------------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
-rpart_test_plot <- data.frame(
-  Individual = seq_along(y_test),
-  Probability_CKD = rpart_pred_prob[,2],
-  Actual_Class = as.factor(y_test)
-)
-
-# Create the plot
-ggplot(data = rpart_test_plot, aes(x = Individual, 
-                                 y = Probability_CKD, 
-                                 color = Actual_Class)) +
-  geom_point() +
-  theme_light(base_size = 14) +
-  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
-  xlab("Test observation") +
-  ylab("Probability of class with rpart") +
-  theme_minimal() +
-  geom_hline(yintercept = 0.5, linetype = "dashed")
-
-# ROC --------------------------------------------------------------------------
-roc_rpart <- roc(y_test, rpart_pred_prob[,2])
-plot(roc_rpart, main="ROC Curve for Optimal KNN Model")
+#plot(rpart_fit, main = 'Hyper-parameter tuning - DT rpart')
 ```
 
-**Tree model**
+In terms of variable importance, the **rpart** model has selected $7$ variables out of $24$ as relevant parameters. This represent less than a $30$% of the columns on the dataset. However, once again `hemo` belong to the top $3$ more important variables.
 
-Advanced DT model, somehow it's a boosting approach 
+```{r rpart_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
+# Plot importance on training --------------------------------------------------
+rpart_var_imp <- varImp(rpart_fit, scale=FALSE)
+plot(rpart_var_imp, main = "Variable importance for DT rpart")
+```
 
-```{r warning=FALSE, message=FALSE}
+**TREE MODEL**. The second model coded is the C5.0 algorithm which is an advanced *decision tree* that can be considered as a form of boosting approach.
+
+```{r hide_train_c50, eval=FALSE}
 # Hyper-parameter search -------------------------------------------------------
 # .winnow; feature selection step conducted before modelling
 # .trial; number of boosting iterations
@@ -972,54 +948,38 @@ c50_fit <- train(class ~.,
                  trControl = ctrl)
 
 print(c50_fit)
-# Best values: trials = 1, model = tree and winnow = FALSE.
+# Best values: trials = 1, model = tree and winnow = FALSE
 
 # Save model -------------------------------------------------------------------
 saveRDS(c50_fit, file="pretrained_models/c50_fit.rds")
+```
 
+```{r conf_matrix_c50}
 # Predictions -----------------------------------------------------------------
-c50_pred = predict(c50_fit, X_test)
-c50_pred_prob = predict(c50_fit, X_test, type = "prob")
-# REVIEW: With prob predictions, we can vary the threshold
+c50_pred <- predict(c50_fit, X_test)
+c50_pred_prob <- predict(c50_fit, X_test, type = "prob")
 
 # Performance measures ---------------------------------------------------------
 confusionMatrix(c50_pred, y_test)
 ```
 
-```{r}
-# Plot tuning hyper-parameter --------------------------------------------------
-plot(c50_fit, main = 'Hyper-parameter tuning - Decision tree')
+Upon application to the testing set, the C5.0 model achieved the same results to the previously decision tree model, the *rpart*. New data, compute same confusion matrix, accuracy and kappa values. Hence, we can conclude there is no different on how rpart and C5.0 are performing when unseen data is introduced. Even though this evaluation metrics are the same, let's explore the differences between this two models when being created.
 
+**Performance of the model**.
+
+The model tuning revealed that configuring the winnowing parameter as FALSE yields consistently into better results, independently the number of iteration used.
+
+```{r c50_measures1, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
+# Plot hyper-parameter tuning --------------------------------------------------
+plot(c50_fit, main = 'Hyper-parameter tuning - DT C5.0')
+```
+
+Variable importance for the C5.0 model shows a limited set of variables, with only four out of twenty-four columns being significant. Hemoglobin (`hemo`) is the most critical feature and specific gravity (`sg`) follows as the second most important. The model also gives some relevance to blood glucose random (`bgr`) and albumin (`al`), however in a minor degree.
+
+```{r c50_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 c50_var_imp <- varImp(c50_fit, scale=FALSE)
-plot(c50_var_imp, main="Variable importance for Decision Tree")
-
-# DT visualization -------------------------------------------------------------
-# TODO: implement this?
-
-# Plot testing performance -----------------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
-c50_test_plot <- data.frame(
-  Individual = seq_along(y_test),
-  Probability_CKD = c50_pred_prob[,2],
-  Actual_Class = as.factor(y_test)
-)
-
-# Create the plot
-ggplot(data = c50_test_plot, aes(x = Individual, 
-                                 y = Probability_CKD, 
-                                 color = Actual_Class)) +
-  geom_point() +
-  theme_light(base_size = 14) +
-  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
-  xlab("Test observation") +
-  ylab("Probability of class with C.50") +
-  theme_minimal() +
-  geom_hline(yintercept = 0.5, linetype = "dashed")
-
-# ROC --------------------------------------------------------------------------
-roc_c50 <- roc(y_test, svm_pred_prob[,2])
-plot(roc_c50, main="ROC Curve for Optimal KNN Model")
+plot(c50_var_imp, main="Variable importance for DT C5.0")
 ```
 
 ### Random Forests
@@ -1347,7 +1307,7 @@ dotplot(models_compare, metric = "Accuracy",
 ```{r}
 # KNN ROC ----------------------------------------------------------------------
 roc_knn <- roc(y_test, knn_pred_prob[,2])
-plot(roc_knn, main="ROC Curve for Optimal KNN Model")
+plot(roc_knn, main = "ROC Curve for Optimal KNN Model")
 
 # KNN plot testing performance -----------------------------------------------------
 # Convert the test set and predictions into a suitable dataframe for ggplot
@@ -1368,9 +1328,11 @@ ggplot(data = kkn_test_plot, aes(x = Actual_Class,
   theme_minimal() +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
+
+
 # SVM ROC ----------------------------------------------------------------------
 roc_svm <- roc(y_test, svm_pred_prob[,2])
-plot(roc_svm, main="ROC Curve for Optimal SVM Model")
+plot(roc_svm, main = "ROC Curve for Optimal SVM Model")
 
 # SVM plot testing performance -------------------------------------------------
 # Convert the test set and predictions into a suitable dataframe for ggplot
@@ -1388,6 +1350,56 @@ ggplot(data = svm_test_plot, aes(x = Actual_Class,
   scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
   xlab("Test observation") +
   ylab("Probability of class with SVM") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+
+
+
+# DT-rpart ROC -----------------------------------------------------------------
+roc_rpart <- roc(y_test, rpart_pred_prob[,2])
+plot(roc_rpart, main = "ROC Curve for Optimal DT-rpart Model")
+
+# DT-rpart plot testing performance --------------------------------------------
+# Convert the test set and predictions into a suitable dataframe for ggplot
+rpart_test_plot <- data.frame(
+  Probability_Prob = rpart_pred_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+ggplot(data = rpart_test_plot, aes(x = Actual_Class,
+                                   y = Probability_Prob,
+                                   color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Probability of class with DT-rpart") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+
+
+
+# ROC --------------------------------------------------------------------------
+roc_c50 <- roc(y_test, c50_pred_prob[,2])
+plot(roc_c50, main="ROC Curve for Optimal DT-C5.0 Model")
+
+# Plot testing performance -----------------------------------------------------
+# Convert the test set and predictions into a suitable dataframe for ggplot
+c50_test_plot <- data.frame(
+  Probability_Prob = c50_pred_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+ggplot(data = c50_test_plot, aes(x = Actual_Class,
+                                 y = Probability_Prob,
+                                 color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Probability of class with DT-C5.0") +
   theme_minimal() +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 ```
