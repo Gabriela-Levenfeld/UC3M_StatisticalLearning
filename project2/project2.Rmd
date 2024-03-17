@@ -661,12 +661,12 @@ pander(prop.table(table(data$class)) * 100)
 \pagebreak
 # Machine-learning tools
 
-For this section are defined some common consideration that I will assume for all models implemented.
+The goal of this section is to evaluate the performance of some machine learning tools for the binary classification task. The aim is to predict whether the patient have chronic kidney disease or not. For each of these models, we will compute the accuracy, the kappa as well as the confusion matrix, a table which will indicate us how many instances were correctly classified and how many were misclassified. Finally, it is worth mentioning, that for this second part of the project are defined some common consideration that I will apply for all models implemented.
 
-1º. The dataset is divided into predictors and the target variable.
+First, training and testing datasets are divided into features and the target variable.
 
 ```{r split_subsets}
-# Divide into predictors and target both subsets
+# Divide into features and target both subsets
 X_train <- training_transf %>% dplyr::select(-class)
 y_train <- training_transf$class
 
@@ -675,25 +675,18 @@ y_test <- testing_transf$class
 n_test <- dim(testing_transf)[1]
 ```
 
-2º. Control to optimize the hyper-parameters.
+To ensure a robust evaluation, a train control parameter is configure: $5$-folds cross-validation repeated $10$ times for optimize hyper-parameters.
 
-```{r}
-# Set up train control:
-# cross-validation -> 5 folds repeated 10-times
-# "summaryFunction = defaultSummary" -> Compute accuracy and kappa statistic
+```{r train_ctrl_setting}
+# Set up train control -> 5-folds cross validation repeated 10 times
 ctrl <- trainControl(method = "repeatedcv",
-                     #summaryFunction = defaultSummary,
                      number = 5, 
                      repeats = 10,
-                     verboseIter = TRUE, # To track cv
+                     verboseIter = TRUE, # TRUE for tracking
                      classProbs = TRUE)
 ```
 
-**REVISAR ESTO!**
-
-3º. Same procedure has been conducted over all machine learning tools. First, it has been done a broad search of the hyper-parameter, I analyze the results to identify a more narrow range of these parameters values where performance seems to optimize, and then conduct a more focused search within that range. On this sections, the script shows the final hyper-parameter setting (narrow search), some comments can guide the reader to understand the selection of these values. Also, this narrow search allow the document to be less time-consuming.
-
-And important step always is to take a look of the parameters we can handle, when using the caret library.
+On the other hand, `caret` [@caret_ref] library's is the package used for code all the models. In order to understand the capabilities for each available models and their tunable parameters, the following commands has been used:
 
 ```{r caret_exploration_models, eval=FALSE}
 # Models supported by caret
@@ -704,8 +697,9 @@ name_caret_model <- "knn" # Change me!
 modelLookup(name_caret_model)
 ```
 
+Lastly, due to time consuming hyper-parameter search the best-performing models are pre-trained, saved, and stored in a dedicated folder (named pretrained_models). This not only saves time during the analysis but also ensure the reproducibility of results for the reader.
 
-```{r folder_pretrain_mod, eval=FALSE}
+```{r folder_pretrain_mod, eval=FALSE, include=FALSE}
 # Specify the folder path
 folder_path <- "pretrained_models"
 # Create the folder if it doesn't exist
@@ -714,7 +708,8 @@ if (!dir.exists(folder_path)) {
 }
 ```
 
-```{r eval=FALSE, include=FALSE}
+```{r loding_model_pretrain}
+# Loading pre-trained models from pretrained_models folder
 # KNN model --------------------------------------------------------------------
 knn_fit <- readRDS("pretrained_models/knn_fit.rds")
 # SVM model --------------------------------------------------------------------
@@ -734,7 +729,11 @@ dnn_fit <- readRDS("pretrained_models/dnn_fit.rds")
 
 ## k-Nearest Neighbors
 
-```{r}
+k-Nearest Neighbors classifier, commonly known as kNN, looks at the closest training examples in the feature space and uses a majority vote to determine the target. One of the advantages is that it makes no assumptions about the underlying data distribution which make it perfect for capturing non-linear data.
+
+The main parameter of kNN is $k$, which allow us to set the number of neighbors to consider for obtaining an optimal accuracy. After a search of this hyper-parameter, the best performance was achieved when $k = 3$, indicating that the model performs right when making predictions based on the three closest neighbors.
+
+```{r hide_train_knn, eval=FALSE, include=FALSE}
 # Hyper-parameter search -------------------------------------------------------
 # K no more than 50% of the training set size.
 # From lecture: preferable to try odd numbers for k
@@ -742,36 +741,37 @@ knn_grid <- expand.grid(k = seq(3, 121, by = 2))
 
 # Training the model -----------------------------------------------------------
 knn_fit <- train(class ~ .,
-                method = "knn",
-                data = training_transf,
-                tuneGrid = knn_grid,
-                metric = "Accuracy",
-                trControl = ctrl)
+                 method = "knn",
+                 data = training_transf,
+                 tuneGrid = knn_grid,
+                 metric = "Accuracy",
+                 trControl = ctrl)
 print(knn_fit)
 # Best values: k = 3
 
 # Save model -------------------------------------------------------------------
 saveRDS(knn_fit, file="pretrained_models/knn_fit.rds")
+```
 
+```{r conf_matrix_knn}
 # Predictions on test ----------------------------------------------------------
-knn_pred = predict(knn_fit, X_test)
-knn_pred_prob = predict(knn_fit, X_test, type = "prob")
-# REVIEW: With prob predictions, we can vary the threshold
+knn_pred <- predict(knn_fit, X_test)
+knn_pred_prob <- predict(knn_fit, X_test, type = "prob")
 
 # Performance measures ---------------------------------------------------------
 confusionMatrix(knn_pred, y_test)
 ```
 
-**Performance of the model**
+When unseen data is used with the best model obtained (hyper-parameter already selected), the model's performance achieved an accuracy of $88.46$%, with a $95$% confidence interval ranging from $79.22$% to $94.59$%. As it is expected, the Kappa metric is slightly lower, this measure considers the accuracy that could be achieved by random chance, making it a more robust metric than accuracy alone.
 
-TESTING PERFORMANCE
+Furthermore, by analyzing the confusion matrix we can understand the model's mistakes. There are no false positives, which is an advantage taking into account this type of error can be costly for the healthcare center. However, the worst mistake, from a life standpoint, occurs when predicting no disease but the patient actually has it. And this is where all errors are concentrated.
 
-- Purpose: To compare the predicted probabilities against the actual classes (true labels).
+**Performance of the model**.
 
-- Insight: Ideally, you would want to see a clear separation where most of the "ckd" actual class points have high predicted probabilities, and the "notckd" points have lower predicted probabilities. Overlap indicates misclassification. If the "ckd" points are spread across a wide range of probabilities, it indicates that the model has difficulty distinguishing between classes.
+The hyper-parameter tuning plot illustrates the relationship between the number of neighbors and the model's performance metrics, accuracy as well as kappa. While $k$ increases, this two metrics decrease which lead us that too many neighbors make the model less accurate. The highest metric values are reached when $k = 3$.
 
-```{r knn_measures, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
-# Plot tuning hyper-parameter --------------------------------------------------
+```{r knn_measures1, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
+# Plot hyper-parameter tuning --------------------------------------------------
 knn_results_search <- knn_fit$results
 
 # df to long format
@@ -791,34 +791,14 @@ ggplot(knn_results_long, aes(x = k, y = Value, color = Metric)) +
   theme_minimal() + 
   theme(plot.title = element_text(hjust = 0.5), legend.title = element_blank()) +
   theme(legend.position = "bottom")
+```
 
+The variable importance plot for the k-Nearest Neighbors model displays the relative importance of each predictor in the classification task. As it can be observed, hemoglobin (`hemo`) stand out as the most significant variable when forecasting the presence or absence of chronic kidney disease. Nevertheless, we cannot ignore packed cell volume (`pcv`), specific gravity (`sg`), serum creatinine (`sc`) or red blood cell count (`rbcc`) which still being crucial for model decision-makers.
+
+```{r knn_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 knn_var_imp <- varImp(knn_fit, scale=FALSE)
 plot(knn_var_imp, main="Variable importance for KNN")
-
-# Plot testing performance -----------------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
-kkn_test_plot <- data.frame(
-  Individual = seq_along(y_test),
-  Probability_CKD = knn_pred_prob[,2],
-  Actual_Class = as.factor(y_test)
-)
-
-# Create the plot
-ggplot(data = kkn_test_plot, aes(x = Individual, 
-                                 y = Probability_CKD, 
-                                 color = Actual_Class)) +
-  geom_point() +
-  theme_light(base_size = 14) +
-  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
-  xlab("Test observation") +
-  ylab("Probability of class with KNN") +
-  theme_minimal() +
-  geom_hline(yintercept = 0.5, linetype = "dashed")
-
-# ROC --------------------------------------------------------------------------
-roc_knn <- roc(y_test, knn_pred_prob[,2])
-plot(roc_knn, main="ROC Curve for Optimal KNN Model")
 ```
 
 ## Support Vector Machines
@@ -1376,6 +1356,32 @@ bwplot(models_compare, metric = "Accuracy",
 dotplot(models_compare, metric = "Accuracy",
         main = "Model Comparison based on Accuracy")
 ```
+
+```{r}
+# KNN ROC ----------------------------------------------------------------------
+roc_knn <- roc(y_test, knn_pred_prob[,2])
+plot(roc_knn, main="ROC Curve for Optimal KNN Model")
+
+# KNN plot testing performance -----------------------------------------------------
+# Convert the test set and predictions into a suitable dataframe for ggplot
+kkn_test_plot <- data.frame(
+  Probability_Prob = knn_pred_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+ggplot(data = kkn_test_plot, aes(x = Actual_Class, 
+                                 y = Probability_Prob, 
+                                 color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Probability of class with KNN") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+```
+
 
 \pagebreak
 # Social impact
