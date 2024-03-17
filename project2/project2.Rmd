@@ -642,13 +642,37 @@ ctrl <- trainControl(method = "repeatedcv",
 
 And important step always is to take a look of the parameters we can handle, when using the caret library.
 
-```{r caret_exploration_models, results='hide'}
+```{r caret_exploration_models, eval=FALSE}
 # Models supported by caret
 names(getModelInfo())
 
 # In order to explore which parameter can be tune
 name_caret_model <- "knn" # Change me!
 modelLookup(name_caret_model)
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# Specify the folder path
+folder_path <- "pretrained_models"
+# Create the folder if it doesn't exist
+if (!dir.exists(folder_path)) {
+  dir.create(folder_path)
+}
+
+# KNN model --------------------------------------------------------------------
+knn_fit <- readRDS("pretrained_models/knn_fit.rds")
+# SVM model --------------------------------------------------------------------
+svm_fit <- readRDS("pretrained_models/svm_fit.rds")
+# DT model ---------------------------------------------------------------------
+rpart_fit <- readRDS("pretrained_models/rpart_fit.rds")
+c50_fit <- readRDS("pretrained_models/c50_fit.rds")
+# RF model ---------------------------------------------------------------------
+rf_fit_final <- readRDS("pretrained_models/rf_fit_final.rds")
+# GB model ---------------------------------------------------------------------
+
+# NN model ---------------------------------------------------------------------
+nn_fit <- readRDS(nn_fit, file="pretrained_models/nn_fit.rds")
 ```
 
 ## k-Nearest Neighbors
@@ -668,6 +692,9 @@ knn_fit <- train(class ~ .,
                 trControl = ctrl)
 print(knn_fit)
 # Best values: k = 3
+
+# Save model -------------------------------------------------------------------
+saveRDS(knn_fit, file="pretrained_models/knn_fit.rds")
 
 # Predictions on test ----------------------------------------------------------
 knn_pred = predict(knn_fit, X_test)
@@ -760,6 +787,9 @@ svm_fit <- train(class ~., method = "svmRadial",
 print(svm_fit)
 # Best values: sigma = 0.5 and C = 0.1
 
+# Save model -------------------------------------------------------------------
+saveRDS(svm_fit, file="pretrained_models/svm_fit.rds")
+
 # Predictions -----------------------------------------------------------------
 svm_pred = predict(svm_fit, X_test)
 svm_pred_prob = predict(svm_fit, X_test, type = "prob")
@@ -828,7 +858,7 @@ Limited DT model, it does not support boosting option.
 ```{r}
 # Hyper-parameter search -------------------------------------------------------
 # cp; size of the tree
-rpart_grid <- expand.grid(.cp = c(0.01, 0.05, 0.1)                          )
+rpart_grid <- expand.grid(.cp = c(0.01, 0.05, 0.1))
 
 # Training the model -----------------------------------------------------------
 rpart_fit <- train(class ~., 
@@ -841,7 +871,10 @@ rpart_fit <- train(class ~.,
 print(rpart_fit)
 # Best values: cp = 0.01
 
-# Predictions --------------------------------------------Z---------------------
+# Save model -------------------------------------------------------------------
+saveRDS(rpart_fit, file="pretrained_models/rpart_fit.rds")
+
+# Predictions ------------------------------------------------------------------
 rpart_pred = predict(rpart_fit, X_test)
 rpart_pred_prob = predict(rpart_fit, X_test, type = "prob")
 # REVIEW: With prob predictions, we can vary the threshold
@@ -897,7 +930,7 @@ plot(roc_rpart, main="ROC Curve for Optimal KNN Model")
 
 Advanced DT model, somehow it's a boosting approach 
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 # Hyper-parameter search -------------------------------------------------------
 # .winnow; feature selection step conducted before modelling
 # .trial; number of boosting iterations
@@ -916,6 +949,9 @@ c50_fit <- train(class ~.,
 
 print(c50_fit)
 # Best values: trials = 1, model = tree and winnow = FALSE.
+
+# Save model -------------------------------------------------------------------
+saveRDS(c50_fit, file="pretrained_models/c50_fit.rds")
 
 # Predictions -----------------------------------------------------------------
 c50_pred = predict(c50_fit, X_test)
@@ -992,7 +1028,7 @@ rf_fit <- train(class ~.,
 print(rf_fit)
 # Best values: mtry = 2
 
-# Try manually different ntree parameters --------------------------------------
+# Try different ntree values manually ------------------------------------------
 model_rf_list <- list()
 testing_ntree_var <- seq(200, 1000, by = 100)
 
@@ -1024,6 +1060,8 @@ rf_fit_final <- train(class ~.,
 
 print(rf_fit_final)
 
+# Save model -------------------------------------------------------------------
+saveRDS(rf_fit_final, file="pretrained_models/rf_fit_final.rds")
 
 # Predictions ------------------------------------------------------------------
 rf_predF = predict(rf_fit_final, X_test)
@@ -1077,34 +1115,112 @@ plot(roc_rf, main="ROC Curve for Optimal RF Model")
 
 ### Gradient Boosting
 
-X-gradiend boosting
-
-```{r eval=FALSE}
-# Tuning grid ------------------------------------------------------------------
-# https://csantill.github.io/RTuningModelParameters/
+```{r}
+# Hyper-parameter search -------------------------------------------------------
+#https://csantill.github.io/RTuningModelParameters/
 xgb_grid = expand.grid(
-  nrounds = c(500,1000),
-  eta = c(0.01, 0.001), # c(0.01,0.05,0.1)
-  max_depth = c(2, 4, 6),
-  gamma = 1,
-  colsample_bytree = c(0.2, 0.4),
-  min_child_weight = c(1,5),
-  subsample = 1
+  nrounds = c(100, 500),
+  eta = c(0.01, 0.1), # Learning rate
+  max_depth = c(3, 6),  # Tree depth
+  gamma = c(0, 1),
+  colsample_bytree = c(0.5, 0.8), # Feature sampling
+  min_child_weight = c(1, 5),
+  subsample = c(0.7, 0.9) 
 )
-
+# dim(xgb_grid) # 128 combinaciones 
 # Training the model -----------------------------------------------------------
-xgb.train = train(Churn ~ .,  data=training,
-                  trControl = ctrl,
-                  metric="EconomicCost",
-                  maximize = F,
-                  tuneGrid = xgb_grid,
-                  preProcess = c("center", "scale"),
-                  method = "xgbTree"
-)
+xgb_fit = train(class ~.,
+                data = training_transf,
+                tuneGrid = xgb_grid,
+                metric = "Accuracy",
+                method = "xgbTree",
+                trControl = ctrl
+                )
+
+print(xgb_fit)
+# Best values: Fitting nrounds = 500, max_depth = 6, eta = 0.01, gamma = 0, colsample_bytree = 0.5, min_child_weight = 1, subsample = 0.9 on full training set
+
+# Predictions -----------------------------------------------------------------
+xgb_pred = predict(xgb_fit, X_test)
+xgb_pred_prob = predict(xgb_fit, X_test, type = "prob")
+# REVIEW: With prob predictions, we can vary the threshold
+
+# Performance measures ---------------------------------------------------------
+confusionMatrix(xgb_pred, y_test)
 ```
 
+
 ## Neural Networks
-Y tb Deep.NN
+
+```{r warning=FALSE, message=FALSE}
+# Hyper-parameter search -------------------------------------------------------
+# size; nº of neurons in the hidden layer
+# decay
+nn_grid <- expand.grid(size=c(2,4,6), 
+                       decay=c(0.01,0.001))
+
+# Training the model -----------------------------------------------------------
+# NN with 1 hidden layer
+nn_fit <- train(class ~.,
+                method = "nnet",
+                data = training_transf,
+                MaxNWts = 1000,
+                maxit = 100,
+                tuneGrid = nn_grid,
+                metric = "Accuracy",
+                trControl = ctrl)
+
+print(nn_fit)
+# Best values: size = 6 and decay = 0.001
+
+# Save model -------------------------------------------------------------------
+saveRDS(nn_fit, file="pretrained_models/nn_fit.rds")
+
+# Predictions -----------------------------------------------------------------
+nn_pred = predict(nn_fit, X_test)
+nn_pred_prob = predict(nn_fit, X_test, type = "prob")
+# REVIEW: With prob predictions, we can vary the threshold
+
+# Performance measures ---------------------------------------------------------
+confusionMatrix(nn_pred, y_test)
+```
+
+```{r nn_measures, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
+# Plot tuning hyper-parameter --------------------------------------------------
+plot(nn_fit)
+
+# Plot importance on training --------------------------------------------------
+nn_imp <- varImp(nn_fit, scale = F)
+plot(nn_imp,
+     scales = list(y = list(cex = .95)), 
+     main="Variable importance for Neural Networks")
+
+# Plot testing performance -----------------------------------------------------
+# Convert the test set and predictions into a suitable dataframe for ggplot
+nn_test_plot <- data.frame(
+  Individual = seq_along(y_test),
+  Probability_CKD = nn_pred_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+ggplot(data = nn_test_plot, aes(x = Individual, 
+                                 y = Probability_CKD, 
+                                 color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Probability of class with NN") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+
+# ROC --------------------------------------------------------------------------
+roc_nn <- roc(y_test, nn_pred_prob[,2])
+plot(roc_svm, main="ROC Curve for Optimal NN Model")
+```
+
+
 
 \pagebreak
 # Social impact
