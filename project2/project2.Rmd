@@ -800,7 +800,9 @@ The variable importance plot for the k-Nearest Neighbors model displays the rela
 ```{r knn_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 knn_var_imp <- varImp(knn_fit, scale=FALSE)
-plot(knn_var_imp, main = "Variable importance for KNN")
+plot(knn_var_imp,
+     scales = list(y = list(cex = .95)), 
+     main = "Variable importance for KNN")
 ```
 
 ## Support Vector Machines.
@@ -868,7 +870,9 @@ The variable importance plot highlights again hemoglobin (`hemo`) as the most si
 ```{r svm_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 svm_var_imp <- varImp(svm_fit, scale=FALSE)
-plot(svm_var_imp, main = "Variable importance for SVM")
+plot(svm_var_imp,
+     scales = list(y = list(cex = .95)), 
+     main = "Variable importance for SVM")
 ```
 
 ## Models based on decision trees.
@@ -929,7 +933,9 @@ In terms of variable importance, the **rpart** model has selected $7$ variables 
 ```{r rpart_measures3, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 rpart_var_imp <- varImp(rpart_fit, scale=FALSE)
-plot(rpart_var_imp, main = "Variable importance for DT rpart")
+plot(rpart_var_imp,
+     scales = list(y = list(cex = .95)), 
+     main = "Variable importance for DT rpart")
 ```
 
 **TREE MODEL**. The second model coded is the C5.0 algorithm which is an advanced *decision tree* that can be considered as a form of boosting approach.
@@ -984,7 +990,9 @@ Variable importance for the C5.0 model shows a limited set of variables, with on
 ```{r c50_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 c50_var_imp <- varImp(c50_fit, scale=FALSE)
-plot(c50_var_imp, main="Variable importance for DT C5.0")
+plot(c50_var_imp,
+     scales = list(y = list(cex = .95)), 
+     main = "Variable importance for DT C5.0")
 ```
 
 ### Random Forests.
@@ -1071,7 +1079,9 @@ The variable importance plot again highlights hemoglobin (`hemo`) as a primary f
 ```{r rf_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 rf_var_imp <- varImp(rf_fit_final, scale=FALSE)
-plot(rf_var_imp, main="Variable importance for RF")
+plot(rf_var_imp, 
+     scales = list(y = list(cex = .95)), 
+     main = "Variable importance for RF")
 ```
 
 ### Gradient Boosting.
@@ -1132,7 +1142,9 @@ We can confirm the dominance of hemoglobin (`hemo`) as the most critical predict
 ```{r xgb_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 xgb_var_imp <- varImp(xgb_fit, scale=FALSE)
-plot(xgb_var_imp, main = "Variable importance for XGB")
+plot(xgb_var_imp, 
+     scales = list(y = list(cex = .95)), 
+     main = "Variable importance for XGB")
 ```
 
 ## Neural Networks.
@@ -1193,7 +1205,7 @@ In neural networks, feature scaling has a significant impact for all inputs cont
 nn_imp <- varImp(nn_fit, scale = F)
 plot(nn_imp,
      scales = list(y = list(cex = .95)), 
-     main="Variable importance for NN")
+     main = "Variable importance for NN")
 ```
 
 ## Deep Neural Network.
@@ -1254,13 +1266,23 @@ The variable importance plot indicate how deep neural networks consider relevant
 dnn_var_imp <- varImp(dnn_fit, scale = FALSE)
 plot(dnn_var_imp,
      scales = list(y = list(cex = .95)), 
-     main="Variable importance for Deep Neural Netwrok")
+     main = "Variable importance for Deep Neural Netwrok")
 ```
 
 \pagebreak
-# Overview models
+# Overview models {#modelsOverview}
 
-```{r}
+The aim of this section is to provide a brief summary of the performance of all models implemented in this project. In general, the models have demonstrated outstanding results, with strong consistency across metrics performance such as the accuracy and the kappa.
+
+The best performance are achieved by **support vector machine** and **random forest**, with RF reaching a perfect accuracy on the testing set of $1$. However, SVM display lower variance during the validation, which suggest it may offer more reliable behavior across different data tries. It is worth mentioning the presence of outliers in the decision tree using **rpart** as well as **xGB** from gradient boosting. Thus this might be indicate higher variability on the training data thus its behaviors sometimes can be unexpected. By exploring the dotplot, it is clear that most of the models, with the exception of **kNN** and **DNN**, are able to get very high accuracy. While high accuracy is desirable, it could also indicate that the models are overfitting, especially when the dataset is no enough complex that can be perfectly the situation for this dataset. Additionally, both decision tress coded (**rpart** and **C5.0**) and the **gradient boosting** yielded identical performance metrics on the test set hence they have similar predictive capabilities.
+
+On the other hand, **neural network** model has not work as well as I was expecting. Nevertheless, it can be due to a preprocessing typo where the `age`variables was not scaled. While correcting this would likely change the model outcomes, this oversiht has underscored the relevance of featuring scaling in model preprocessing. Specially, those models that are highly sensitivity to the magnitude of the inputs.
+
+While accuracy is often our primary focus, it is essential to recognize that it may not always be the most beneficial metric. In the [Social impact section](#socialImpact), we will see the advantages of prioritizing models that, while are less accurate, they produced better outcomes from a social perspective.
+
+Finally, it has been include a special section named  [Scores on the testing set section](#annex) where it can be visualized all scores obtained on the testing set for each models.
+
+```{r comparison_models, warning=FALSE, message=FALSE, fig.align='center', out.width="90%"}
 # Compare model performance ----------------------------------------------------
 models_compare <- resamples(list(KNN = knn_fit,
                                  SVM = svm_fit,
@@ -1272,8 +1294,8 @@ models_compare <- resamples(list(KNN = knn_fit,
                                  DNN = dnn_fit)
                             )
 
-# Summary
-summary(models_compare)
+# Analytical summary
+#summary(models_compare)
 
 # Box-and-Whisker Plot
 bwplot(models_compare, metric = "Accuracy",
@@ -1284,228 +1306,347 @@ dotplot(models_compare, metric = "Accuracy",
         main = "Model Comparison based on Accuracy")
 ```
 
-```{r warning=FALSE, message=FALSE}
-# KNN ROC ----------------------------------------------------------------------
-roc_knn <- roc(y_test, knn_pred_prob[,2])
-plot(roc_knn, main = "ROC Curve for Optimal KNN Model")
+\pagebreak
+# Social impact {#socialImpact}
 
+From a medical point of view, accurately diagnosing chronic kidney disease is an important decision due to the severe implications associated with its misdiagnosis. This section focus on the social impact analysis using the k-Nearest Neighbors (kNN) model, chosen due to its tendency to commit a relatively high number of critical errors, failing to detect the presence of ckd in affected patients.
+
+When a model predict wrongly, we must take into account that not all mistakes carry the same social consequences. Incorrectly identify a patient with ckd may lead to unnecessary stress, medical interventions, among others. However, failing to diagnose the presence of this illness when the patient is suffering from ckd, can have far more repercussions. This will lead us into the absence of medical treatment and significantly decreasing the patient's quality of life as well as its life expectancy. Therefore, we can conclude, that there are mistakes that are "worst" than others and in our situation this error is when the model is no able to identify the presence of ckd when the patient actually have it.
+
+For the following analysis some assumption are need to be done.
+
+- If the model correctly diagnose a patience as not having chronic kidney disease, this will results in no change to their quality of life ($100$% quality of life still).
+
+- If the model correctly diagnose a patience has chronic kidney disease, this will turn into the proper treatment, maintaining their quality of life ($100$% of quality life).
+
+- If the model predict a patient has ckd when they are healthy. This situation leads to a decrease in quality of life due to unnecessary medical treatment and psychological stress. However, it may be an advantages thanks to a special care on the patient (-$3$% quality of life).
+
+- If the model fails to diagnose chronic kidney disease in an affected patient. The consequences are huge, because the lack of treatment (with a 90% decrease in quality of life).
+
+Given these assumptions, our goal is to adjust the model's classification threshold to minimize the most socially costly errors (false negatives). This involves a series of steps where we iteratively adjust the threshold for classifying a patient as having ckd and evaluate the social impact based on the quality of life adjustments defined above.
+
+```{r trctrl_optTheshold, include=FALSE}
+# Set up somme configuration
+ctrl2 <- trainControl(method = "repeatedcv",
+                     number = 3, 
+                     repeats = 5,
+                     verboseIter = FALSE,
+                     classProbs = TRUE)
+```
+
+```{r optThreshold}
+cost.unit <- c(1, -0.03, -0.9, 1) 
+cost.i = matrix(NA, nrow = 50, ncol = 10) # Selecting the optimal threshold
+
+j <- 0
+# This is for doing hyper-parameter
+for (threshold in seq(0.50,0.95,0.05)){
+  
+  j <- j + 1
+  cat(j) # For feedback
+  for(i in 1:50){
+    
+    # partition data intro train_train (60%) and train_validation sets (40%)
+    index <- createDataPartition(training_transf$class, p = 0.6, list = FALSE)
+    
+    # select training sample
+    train_train <- training_transf[index,]
+    train_val  <- training_transf[-index,]  
+    
+    # Fit kNN model
+    knnFit <- train(class ~ .,
+                    method = "knn",
+                    data = train_train,
+                    tuneGrid = expand.grid(k = seq(3, 7, by=2)),
+                    metric = "Accuracy",
+                    trControl = ctrl2)
+    
+    # Obtain predicted scores on validation set
+    knnProb <- predict(knnFit, train_val, type = "prob")
+    # Convert scores to predicted classes based on threshold
+    knnPred <- rep("ckd", nrow(train_val))
+    knnPred[which(knnProb[,"notckd"] > threshold)] = "notckd"
+    
+    # Create confusion matrix
+    CM <- confusionMatrix(factor(knnPred), train_val$class)$table
+    # Compute quality improvement of quality life per patient
+    cost <- sum(as.vector(CM)*cost.unit)/sum(CM)
+    cost
+    cost.i[i,j] <- cost
+    
+  }
+}
+
+# Threshold optimization:
+boxplot(cost.i, main = "Threshold selection",
+        ylab = "unit cost",
+        xlab = "threshold value",
+        names = seq(0.50,0.95,0.05), col="royalblue2", las=2)
+
+# values around 0.2 are reasonable
+apply(cost.i, 2, median)
+```
+
+The width of the boxes on the boxplot represent the variability of the unit social impact across the different tries of the hyper-parameter tuning. A smaller width means a more reliable model’s performance. Therefore, in this situation, the optimal threshold is $0.95$.
+
+Finally, once we have computed the optimal threshold we can use it in order to train our model and make predictions over the test set. This will turn into a worst accuracy model but our quality life of the patient will be improved.
+
+```{r optModel}
+# Final prediction for testing set using the optimal hyper-parameter:
+best_threshold <- 0.95
+# Fit the logistic regression model using the training data
+model_knnFit <- train(class ~ .,
+                      method = "knn",
+                      data = training_transf,
+                      tuneGrid = expand.grid(k = 3),
+                      metric = "Accuracy",
+                      trControl = ctrl2)
+
+# Predict probabilities on the test set
+score <- predict(model_knnFit, newdata = testing_transf, type = "prob")
+
+# Make final predictions using the best threshold
+final_predictions <- ifelse(score[, "notckd"] > best_threshold, "notckd", "ckd")
+
+# Confusion matrix
+confusionMatrix(factor(final_predictions), testing_transf$class)
+```
+
+As our initial though the quality of life of a patient is improved but we create a worse model regarding to the accuracy. However, due to the importance of correctly diagnose a patient in order to improve its life, there is no doubt that this model even though it makes more mistakes it is much beneficial. Final remark, it is that sometimes we must be really conservative when setting the threshold for trying to avoid false negative (specially in medical issues).
+
+\pagebreak
+# Conclusion
+
+This project is focus on analyzing the presence or absence of chronic kidney disease among $24$ variables. The initial step centered on understanding the dataset as well as preparing it for the machine learning tools. It is worth mentioning the utilization of the `mice.reuse` function for data imputation, which enable the generation of more reliable values for NA's.
+
+Throughout this task, a total of $8$ models were developed, and their performance was evaluated across various metrics. While detailed insights have been previously discussed in the [Overview models section](#modelsOverview), it's worth repeating some key ideas. Decision tree based models yielded into similar results, with three of them producing identical confusion matrices on the test set. The Random Forest model achieved perfect accuracy, thus it has been the best model. A rare and unexpected behavior in the Deep Neural Networks highlighted a preprocessing typo, where the variable `age` was not scaled, affecting the model's performance. Despite this, all models demonstrated exceptional accuracy and kappa scores.
+
+The last part aim to incorpore the social impact on the kNN model, demonstrating that not all errors are equal in their implications for patient outcomes. For instance, the “worst” mistake is failing at predicting a patient is not having chronic kidney disease but they actually has. This can clearly affect a patient's quality of life. By incorporating social impact considerations into our evaluation, we illustrated that a model with slightly lower accuracy could offer greater benefits by minimizing the most worst errors. This procedure can be done by adjusting the prediction threshold.
+
+In summary, this project yield the necessity of thorough preprocessing and a deep understanding of the data we are dealing with. We leveraged a variety of `R` tools to analyze and visualize the machine learning models and their behaviors (e.g., variable importance plots), enriching our insights on the models.
+
+**Disclaimer**. Full source code, pre-trained models, and adjusted dataset can be found on my GitHub repository ([click here to access](https://github.com/Gabriela-Levenfeld/UC3M_StatisticalLearning/tree/main)).
+
+\pagebreak
+# References
+
+<div id="refs"></div>
+
+\pagebreak
+# Annex: scores on the testing set {#annex}
+
+Until now, we have always explore the confusion matrix which a useful analytical tool. However, a more visually manner can be generated with a plot for all models with the scores of the predicted values for each patient. For clarity, i have grouped all individual on the two possible outcome. The point represent each predictions with the model we are evaluating, where blue points are the healthy patients and red points the ones that has chronic kidney disease. The dashed horizontal line at 0.5 serves as a decision threshold, indicating the level at which the model switches from predicting the two possible outcomes. This allow us to give a visually representation of how the model is predicting.
+
+```{r scores_plots, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
 # KNN plot testing performance -----------------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
+# Dataframe for ggplot, the scores are nedded!
 kkn_test_plot <- data.frame(
   Probability_Prob = knn_pred_prob[,2],
   Actual_Class = as.factor(y_test)
 )
 
 # Create the plot
-ggplot(data = kkn_test_plot, aes(x = Actual_Class, 
-                                 y = Probability_Prob, 
-                                 color = Actual_Class)) +
+knn_plot <- ggplot(data = kkn_test_plot,
+                   aes(x = Actual_Class,
+                       y = Probability_Prob,
+                       color = Actual_Class)) +
   geom_point() +
   theme_light(base_size = 14) +
   scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
   xlab("Test observation") +
-  ylab("Probability of class with KNN") +
+  ylab("Score of class with KNN") +
   theme_minimal() +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
 
-
-# SVM ROC ----------------------------------------------------------------------
-roc_svm <- roc(y_test, svm_pred_prob[,2])
-plot(roc_svm, main = "ROC Curve for Optimal SVM Model")
-
 # SVM plot testing performance -------------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
+# Dataframe for ggplot, the scores are nedded!
 svm_test_plot <- data.frame(
   Probability_Prob = svm_pred_prob[,2],
   Actual_Class = as.factor(y_test)
 )
 
 # Create the plot
-ggplot(data = svm_test_plot, aes(x = Actual_Class, 
-                                 y = Probability_Prob, 
-                                 color = Actual_Class)) +
+svm_plot <- ggplot(data = svm_test_plot,
+                   aes(x = Actual_Class,
+                       y = Probability_Prob,
+                       color = Actual_Class)) +
   geom_point() +
   theme_light(base_size = 14) +
   scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
   xlab("Test observation") +
-  ylab("Probability of class with SVM") +
+  ylab("Score of class with SVM") +
   theme_minimal() +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
 
-
-# DT-rpart ROC -----------------------------------------------------------------
-roc_rpart <- roc(y_test, rpart_pred_prob[,2])
-plot(roc_rpart, main = "ROC Curve for Optimal DT-rpart Model")
-
 # DT-rpart plot testing performance --------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
+# Dataframe for ggplot, the scores are nedded!
 rpart_test_plot <- data.frame(
   Probability_Prob = rpart_pred_prob[,2],
   Actual_Class = as.factor(y_test)
 )
 
 # Create the plot
-ggplot(data = rpart_test_plot, aes(x = Actual_Class,
-                                   y = Probability_Prob,
-                                   color = Actual_Class)) +
+rpart_plot <- ggplot(data = rpart_test_plot,
+                     aes(x = Actual_Class,
+                         y = Probability_Prob,
+                         color = Actual_Class)) +
   geom_point() +
   theme_light(base_size = 14) +
   scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
   xlab("Test observation") +
-  ylab("Probability of class with DT-rpart") +
+  ylab("Score of class with DT-rpart") +
   theme_minimal() +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
 
 
-# DT-c5.0 ROC ------------------------------------------------------------------
-roc_c50 <- roc(y_test, c50_pred_prob[,2])
-plot(roc_c50, main="ROC Curve for Optimal DT-C5.0 Model")
-
 # DT-c5.0 plot testing performance --------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
+# Dataframe for ggplot, the scores are nedded!
 c50_test_plot <- data.frame(
   Probability_Prob = c50_pred_prob[,2],
   Actual_Class = as.factor(y_test)
 )
 
 # Create the plot
-ggplot(data = c50_test_plot, aes(x = Actual_Class,
-                                 y = Probability_Prob,
-                                 color = Actual_Class)) +
+c50_plot <- ggplot(data = c50_test_plot,
+                   aes(x = Actual_Class,
+                       y = Probability_Prob,
+                       color = Actual_Class)) +
   geom_point() +
   theme_light(base_size = 14) +
   scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
   xlab("Test observation") +
-  ylab("Probability of class with DT-C5.0") +
+  ylab("Score of class with DT-C5.0") +
   theme_minimal() +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
 
-
-# RF ROC -----------------------------------------------------------------------
-roc_rf <- roc(y_test, rf_predF_prob[,2])
-plot(roc_rf, main="ROC Curve for Optimal RF Model")
-
 # RF plot testing performance --------------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
+# Dataframe for ggplot, the scores are nedded!
 rf_test_plot <- data.frame(
   Probability_Prob = rf_predF_prob[,2],
   Actual_Class = as.factor(y_test)
 )
 
 # Create the plot
-ggplot(data = rf_test_plot, aes(x = Actual_Class,
-                                y = Probability_Prob,
-                                color = Actual_Class)) +
+rf_plot <- ggplot(data = rf_test_plot,
+                  aes(x = Actual_Class,
+                      y = Probability_Prob,
+                      color = Actual_Class)) +
   geom_point() +
   theme_light(base_size = 14) +
   scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
   xlab("Test observation") +
-  ylab("Probability of class with RF") +
+  ylab("Score of class with RF") +
   theme_minimal() +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
 
-
-# NN ROC -----------------------------------------------------------------------
-roc_nn <- roc(y_test, nn_pred_prob[,2])
-plot(roc_nn, main="ROC Curve for Optimal NN Model")
-
 # NN plot testing performance --------------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
+# Dataframe for ggplot, the scores are nedded!
 nn_test_plot <- data.frame(
   Probability_Prob = nn_pred_prob[,2],
   Actual_Class = as.factor(y_test)
 )
 
 # Create the plot
-ggplot(data = nn_test_plot, aes(x = Actual_Class,
-                                y = Probability_Prob,
-                                color = Actual_Class)) +
+nn_plot <- ggplot(data = nn_test_plot,
+                  aes(x = Actual_Class,
+                      y = Probability_Prob,
+                      color = Actual_Class)) +
   geom_point() +
   theme_light(base_size = 14) +
   scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
   xlab("Test observation") +
-  ylab("Probability of class with NN") +
+  ylab("Score of class with NN") +
   theme_minimal() +
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
 
-
-# DNN ROC ----------------------------------------------------------------------
-roc_dnn <- roc(y_test, dnn_pred_prob[,2])
-plot(roc_dnn, main="ROC Curve for Optimal DNN Model")
-
 # DNN plot testing performance -------------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
+# Dataframe for ggplot, the scores are nedded!
 dnn_test_plot <- data.frame(
   Probability_Prob = dnn_pred_prob[,2],
   Actual_Class = as.factor(y_test)
 )
 
 # Create the plot
-ggplot(data = dnn_test_plot, aes(x = Actual_Class,
-                                 y = Probability_Prob,
-                                 color = Actual_Class)) +
+dnn_plot <- ggplot(data = dnn_test_plot,
+                   aes(x = Actual_Class,
+                       y = Probability_Prob,
+                       color = Actual_Class)) +
   geom_point() +
   theme_light(base_size = 14) +
   scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
   xlab("Test observation") +
-  ylab("Probability of class with DNN") +
+  ylab("Score of class with DNN") +
   theme_minimal() +
   geom_hline(yintercept = 0.5, linetype = "dashed")
-```
 
-# Stuff to remove
-
-library(pdp) this library allow us to see the dependencies/Relation between variables. For example, we see with the first line of code that the dependency is not-lineal.
-In LR the relation was a line, and it was capable to capture this relation.
-
-```{r eval=FALSE}
-# Explore the relationship of the most important variable
-library(pdp)
-partial(rf_fit_final, pred.var = "hemo", which.class=2, plot = TRUE, prob=TRUE, rug = TRUE)
-# Se pueden analizar más
-```
-
-
-\pagebreak
-# Social impact
-
-2º. **Economic assumption used**. Incorporating a custom metric in Caret.
-
-- If the doctor correctly diagnose a patience does not have a chronic kidney disease, the 
-
-**Economic assumption used**.
-
-- If the company predicts a customer is going to stay and it actually stay, the company gains a 12% profit at the end of the quarter.
-
-- If the company predicts a customer is going to stay but he leaves, the loss is 100%.
-
-- If the company predict a customer is going to leave but he actually stay, the profit is 10%.
-
-- If the company predict a customer is going to leave and he actually leave, then the profit is 3%.
-
-Using the specified profits and losses for each prediction outcome, we compute the average profit per customer based on the model's predictions.
-
-```{r eval=FALSE}
-# lev=NULL is mandatory to get the k. So caret can interprretate this is the accuracy (or somthing like that ha dicho)
-profit_unit <- c(0.12, -0.01, -1.0, 0.0)
-EconomicProfit <- function(data, lev = NULL, model = NULL) 
-{
-  y_pred = data$pred 
-  y_true = data$obs
-  CM = confusionMatrix(y_pred, y_true)$table
-  out = sum(profit_unit*CM)/sum(CM)
-  names(out) <- c("EconomicProfit")
-  out
-}
+# Grid of 2x2
+grid.arrange(knn_plot, svm_plot, rpart_plot, c50_plot, ncol = 2, nrow = 2)
+grid.arrange(rf_plot, nn_plot, dnn_plot, ncol = 2, nrow = 2)
 ```
 
 \pagebreak
-# References
+# Annex: ROC curves {#annex}
 
-<div id="refs"></div>
+ROC curve display for all models.
+
+```{r roc_plits, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+# Compute ROCs
+roc_knn <- roc(y_test, knn_pred_prob[,2])
+roc_svm <- roc(y_test, svm_pred_prob[,2])
+roc_rpart <- roc(y_test, rpart_pred_prob[,2])
+roc_c50 <- roc(y_test, c50_pred_prob[,2])
+roc_rf <- roc(y_test, rf_predF_prob[,2])
+roc_nn <- roc(y_test, nn_pred_prob[,2])
+roc_dnn <- roc(y_test, dnn_pred_prob[,2])
+
+# df for using ggplot2
+df_roc_knn <- data.frame(t = roc_knn$thresholds, 
+                         sensitivity = roc_knn$sensitivities,
+                         specificity = roc_knn$specificities, model = 'KNN')
+df_roc_svm <- data.frame(t = roc_svm$thresholds, 
+                         sensitivity = roc_svm$sensitivities,
+                         specificity = roc_svm$specificities, model = 'SVM')
+df_roc_rpart <- data.frame(t = roc_rpart$thresholds, 
+                           sensitivity = roc_rpart$sensitivities,
+                           specificity = roc_rpart$specificities, model = 'DT-rpart')
+df_roc_c50 <- data.frame(t = roc_c50$thresholds,
+                         sensitivity = roc_c50$sensitivities,
+                         specificity = roc_c50$specificities, model = 'DT-C5.0')
+df_roc_rf <- data.frame(t = roc_rf$thresholds,
+                        sensitivity = roc_rf$sensitivities,
+                        specificity = roc_rf$specificities, model = 'RF')
+df_roc_nn <- data.frame(t = roc_nn$thresholds,
+                        sensitivity = roc_nn$sensitivities, 
+                        specificity = roc_nn$specificities, model = 'NN')
+df_roc_dnn <- data.frame(t = roc_dnn$thresholds,
+                         sensitivity = roc_dnn$sensitivities,
+                         specificity = roc_dnn$specificities, model = 'DNN')
+
+# Combine all ROCs
+roc_data <- bind_rows(df_roc_knn,
+                      df_roc_svm, 
+                      df_roc_rpart, 
+                      df_roc_c50,
+                      df_roc_rf,
+                      df_roc_nn,
+                      df_roc_dnn)
+
+# Plot them
+ggplot(roc_data, aes(x = 1 - specificity, y = sensitivity, color = model)) + 
+  geom_line() + 
+  theme_minimal() + 
+  labs(title = "ROC Curves Comparison",
+       x = "1 - Specificity",
+       y = "Sensitivity") +
+  scale_color_manual(values = c("KNN" = "red", "SVM" = "blue", "DT-rpart" = "green", "DT-C5.0" = "orange", "RF" = "purple", "NN" = "brown", "DNN" = "pink")) +
+  geom_abline(linetype = "dashed", color = "gray50") +
+  theme(legend.title = element_blank(), 
+        legend.position = "bottom",
+        plot.title = element_text(hjust = 0.5))
+```
