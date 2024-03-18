@@ -728,7 +728,7 @@ nn_fit <- readRDS("pretrained_models/nn_fit.rds")
 dnn_fit <- readRDS("pretrained_models/dnn_fit.rds")
 ```
 
-## k-Nearest Neighbors
+## k-Nearest Neighbors.
 
 k-Nearest Neighbors classifier, commonly known as kNN, looks at the closest training examples in the feature space and uses a majority vote to determine the target. One of the advantages is that it makes no assumptions about the underlying data distribution which make it perfect for capturing non-linear data.
 
@@ -739,6 +739,7 @@ The main parameter of kNN is $k$, which allow us to set the number of neighbors 
 # K no more than 50% of the training set size.
 # From lecture: preferable to try odd numbers for k
 knn_grid <- expand.grid(k = seq(3, 121, by = 2))
+dim(knn_grid) # 60 combinaciones 
 
 # Training the model -----------------------------------------------------------
 knn_fit <- train(class ~ .,
@@ -802,7 +803,7 @@ knn_var_imp <- varImp(knn_fit, scale=FALSE)
 plot(knn_var_imp, main = "Variable importance for KNN")
 ```
 
-## Support Vector Machines
+## Support Vector Machines.
 
 Support Vector Machines, known also as SVM, is a classifier based on the idea of maximizing the gap between different classes. Kernel functions plays an important role on this models and works well with non-linear problems. Additionally, is not influenced by the presence of outliers which can be beneficial for this dataset and its well-known for reducing the risk of overfitting. In this analysis, we have utilized the *radial basis function kernel* in caret (`svmRadial`).
 
@@ -813,6 +814,7 @@ Support Vector Machines, known also as SVM, is a classifier based on the idea of
 svm_grid <- expand.grid(C =  c(1e-1, 1e0, 1e1, 1e2, 1e3, 1e4), 
                         sigma = c(0.01, 0.05, 0.1, 0.5, 1, 2, 5)
                         )
+dim(svm_grid) # 42 combinaciones
 
 # Training the model -----------------------------------------------------------
 svm_fit <- train(class ~., method = "svmRadial", 
@@ -869,9 +871,9 @@ svm_var_imp <- varImp(svm_fit, scale=FALSE)
 plot(svm_var_imp, main = "Variable importance for SVM")
 ```
 
-## Models based on decision trees
+## Models based on decision trees.
 
-### Decision trees
+### Decision trees.
 
 In general, decision trees are well suited for dataset with missing values or outliers on it. Although this dataset not longer contains NA's, using decision trees can still be advantageous due to the presence of outliers in some of the variables. Furthermore, their ability for automatic feature selection make it easy its interpretability. For this kind of model we explore two options provided by the `caret` library.
 
@@ -940,6 +942,7 @@ c50_grid <- expand.grid( .winnow = c(TRUE, FALSE),
                          .trials=c(1, 5, 4),
                          .model= "tree"
                          )
+dim(c50_grid)
 
 # Training the model -----------------------------------------------------------
 c50_fit <- train(class ~., 
@@ -984,7 +987,7 @@ c50_var_imp <- varImp(c50_fit, scale=FALSE)
 plot(c50_var_imp, main="Variable importance for DT C5.0")
 ```
 
-### Random Forests
+### Random Forests.
 
 Random forest are an evolution of decision tree, designed for enhancing model's performance by reducing overfitting. It involves creating multiple decision trees and aggregate the predictions of the trees in order to produce the final prediction. `caret` package only allow to tune the `mtry` parameter however I want to illustrate that it is possible to expand the search manually to find other parameters such as the `ntree` variable.
 
@@ -1071,11 +1074,12 @@ rf_var_imp <- varImp(rf_fit_final, scale=FALSE)
 plot(rf_var_imp, main="Variable importance for RF")
 ```
 
-### Gradient Boosting
+### Gradient Boosting.
 
-```{r}
+Gradient Boosting is an advanced ensemble technique that builds a series of decision trees sequentially. As other models, it is good handling outliers as well as any type of predictor. However, ti can overfit quickly and be time-consuming. In fact, it the most computationally expensive method used over the project. In `caret` we are able to tune several hyper-parameters, including the learning rate, tree depth, ...
+
+```{r hide_train_xgb, eval=FALSE}
 # Hyper-parameter search -------------------------------------------------------
-#https://csantill.github.io/RTuningModelParameters/
 xgb_grid = expand.grid(
   nrounds = c(100, 500),
   eta = c(0.01, 0.1), # Learning rate
@@ -1085,7 +1089,8 @@ xgb_grid = expand.grid(
   min_child_weight = c(1, 5),
   subsample = c(0.7, 0.9) 
 )
-# dim(xgb_grid) # 128 combinaciones 
+dim(xgb_grid) # 128 combinaciones
+
 # Training the model -----------------------------------------------------------
 xgb_fit = train(class ~.,
                 data = training_transf,
@@ -1100,24 +1105,46 @@ print(xgb_fit)
 
 # Save model -------------------------------------------------------------------
 saveRDS(xgb_fit, file="pretrained_models/xgb_fit.rds")
+```
 
-# Predictions -----------------------------------------------------------------
+```{r conf_matrix_xgb}
+# Predictions on test ----------------------------------------------------------
 xgb_pred = predict(xgb_fit, X_test)
 xgb_pred_prob = predict(xgb_fit, X_test, type = "prob")
-# REVIEW: With prob predictions, we can vary the threshold
 
 # Performance measures ---------------------------------------------------------
 confusionMatrix(xgb_pred, y_test)
 ```
 
-## Neural Networks
+The model's performance on the test set yielded an accuracy of $97.44$% and a kappa of $94.58$%. This high values, suggest that the xGB has achieved a near perfect fit to the data. Just a few mistakes have been committed, once for false positive and another for false negative.
 
-```{r warning=FALSE, message=FALSE}
+**Performance of the model**.
+
+Due to the high accuracy and kappa of this model, the hyperparameter tuning plot does not show a clear pattern that distinguishes between the configurations. Therefore, it is not included in the final report.
+
+```{r xgb_measures1, eval=FALSE}
+# Plot hyper-parameter tuning --------------------------------------------------
+plot(xgb_fit, main = 'Hyper-parameter tuning - XGB')
+```
+
+We can confirm the dominance of hemoglobin (`hemo`) as the most critical predictive feature, as seen with other models. Specific gravity (`sg`) also represent a high importance, underlining the consistency across different modeling approaches in identifying the key factors for the presence or absence of the disease prediction.
+
+```{r xgb_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
+# Plot importance on training --------------------------------------------------
+xgb_var_imp <- varImp(xgb_fit, scale=FALSE)
+plot(xgb_var_imp, main = "Variable importance for XGB")
+```
+
+## Neural Networks.
+
+Neural Networks offer the ability to capture complex non linear relationships between variables, but it is computationally expensive and it can easly guide us into overfitting. The "worst" thing is the difficulty to understand it often called as *black-box tool*.
+
+```{r hide_train_nn, eval=FALSE}
 # Hyper-parameter search -------------------------------------------------------
 # size; nº of neurons in the hidden layer
-# decay
 nn_grid <- expand.grid(size=c(2,4,6), 
                        decay=c(0.01,0.001))
+dim(nn_grid)
 
 # Training the model -----------------------------------------------------------
 # NN with 1 hidden layer
@@ -1135,54 +1162,45 @@ print(nn_fit)
 
 # Save model -------------------------------------------------------------------
 saveRDS(nn_fit, file="pretrained_models/nn_fit.rds")
+```
 
-# Predictions -----------------------------------------------------------------
+```{r conf_matrix_nn}
+# Predictions on test ----------------------------------------------------------
 nn_pred = predict(nn_fit, X_test)
 nn_pred_prob = predict(nn_fit, X_test, type = "prob")
-# REVIEW: With prob predictions, we can vary the threshold
 
 # Performance measures ---------------------------------------------------------
 confusionMatrix(nn_pred, y_test)
 ```
 
-```{r nn_measures, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
-# Plot tuning hyper-parameter --------------------------------------------------
-plot(nn_fit)
+The confusion matrix, shows how well this models is working due to its high accuracy and kappa. The errors made are minimum; one mistake is done when predicting the patient does not have ckd and in reality the patient is sick (has ckd). This mistake represent the worst error that our model can committee.
 
+**Performance of the model**.
+
+The following pattern can be reach, when the weight decay is fixed to $0.001$ the accuracy improves as the number of hidden neurons increase from $2$ to $6$. However, this trend is not strictly follows when weight decay is fixed into $0.01$. Then it is obvious that varying one parameter affect the configuration for the rest search variables.
+
+```{r nn_measures1, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
+# Plot tuning hyper-parameter --------------------------------------------------
+plot(nn_fit, main = 'Hyper-parameter tuning - NN')
+```
+
+Finally, we can identify an unexpected behavior on the variable importance plot for this model. `age` variable is set as the most influential parameter. However this does not have any sense in comparing with the previous results. Such anomaly lead us into a re examination of the data preprocessing steps, particularly the scaling of input variables where we can find the mistake.
+
+In neural networks, feature scaling has a significant impact for all inputs contribute equally to the model's learning process. When not scaling the `age` input we are causing to make in this variable more important. Despite this issue, `hemo` remains to be the second most important variable over the dataset, which align with the results obtained until now.
+
+```{r nn_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 nn_imp <- varImp(nn_fit, scale = F)
 plot(nn_imp,
      scales = list(y = list(cex = .95)), 
-     main="Variable importance for Neural Networks")
-
-# Plot testing performance -----------------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
-nn_test_plot <- data.frame(
-  Individual = seq_along(y_test),
-  Probability_CKD = nn_pred_prob[,2],
-  Actual_Class = as.factor(y_test)
-)
-
-# Create the plot
-ggplot(data = nn_test_plot, aes(x = Individual, 
-                                 y = Probability_CKD, 
-                                 color = Actual_Class)) +
-  geom_point() +
-  theme_light(base_size = 14) +
-  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
-  xlab("Test observation") +
-  ylab("Probability of class with NN") +
-  theme_minimal() +
-  geom_hline(yintercept = 0.5, linetype = "dashed")
-
-# ROC --------------------------------------------------------------------------
-roc_nn <- roc(y_test, nn_pred_prob[,2])
-plot(roc_nn, main="ROC Curve for Optimal NN Model")
+     main="Variable importance for NN")
 ```
 
-## Deep Neural Network
+## Deep Neural Network.
 
-```{r warning=FALSE, message=FALSE}
+Deep Neural Networks extend traditional neural networks by incorporating multiple hidden layers, offering the ability to model highly complex relationships within the dataset. We can adjust this hidden layers, for making more accurate predictions.
+
+```{r hide_train_dnn, eval=FALSE}
 # Hyper-parameter search -------------------------------------------------------
 # layer1, layer2, layer3: nº of neuron in each hidden layers
 dnn_grid <- expand.grid(layer1 = c(5, 10, 15),
@@ -1195,60 +1213,48 @@ dnn_grid <- expand.grid(layer1 = c(5, 10, 15),
 # Training the model -----------------------------------------------------------
 # NN with 1 hidden layer
 dnn_fit <- train(class ~.,
-                method = "dnn",
-                data = training_transf,
-                numepochs = 20, # nº of iterations on the whole training set
-                tuneGrid = dnn_grid,
-                metric = "Accuracy",
-                trControl = ctrl)
+                 method = "dnn",
+                 data = training_transf,
+                 numepochs = 20, # nº of iterations on the whole training set
+                 tuneGrid = dnn_grid,
+                 metric = "Accuracy",
+                 trControl = ctrl)
 
 print(dnn_fit)
-# Best values:
+# Best values: layer1 = 15, layer2 = 0, layer3 =  0, hidden_dropout = 0.2 and visible_dropout = 0.1
 
 # Save model -------------------------------------------------------------------
 saveRDS(dnn_fit, file="pretrained_models/dnn_fit.rds")
+```
 
-# Predictions -----------------------------------------------------------------
+```{r conf_matrix_dnn}
+# Predictions on test ----------------------------------------------------------
 dnn_pred = predict(dnn_fit, X_test)
 dnn_pred_prob = predict(dnn_fit, X_test, type = "prob")
-# REVIEW: With prob predictions, we can vary the threshold
 
 # Performance measures ---------------------------------------------------------
 confusionMatrix(dnn_pred, y_test)
 ```
 
-```{r}
+With this model, we can appreciated how the metrics are a little bit lower: accuracy of $89.74$% and kappa of $79.12$%, although they are still pretty high. When focus on the error performance, we can realised that this model is making mos of the mistakes over what we have define as the worst one (predicting notckd when the patient actually has ckd). Hence, in terms of errors we can conclude this is our worst model.
+
+**Performance of the model**.
+
+The following plots showcases how the model's accuracy responds to changes in the network's architecture. Generally, increasing the number of neurons seems to increase accuracy.
+
+```{r dnn_measures1, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot tuning hyper-parameter --------------------------------------------------
 plot(dnn_fit)
+```
 
+The variable importance plot indicate how deep neural networks consider relevant most of the variables in contrast with other models such as the decision trees. Nevertheless, same features as before are located on the top relevant position (`hemo`, `pcv`and `sg`).
+
+```{r dnn_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 dnn_var_imp <- varImp(dnn_fit, scale = FALSE)
 plot(dnn_var_imp,
      scales = list(y = list(cex = .95)), 
      main="Variable importance for Deep Neural Netwrok")
-
-# Plot testing performance -----------------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
-dnn_test_plot <- data.frame(
-  Individual = seq_along(y_test),
-  Probability_CKD = dnn_pred_prob[,2],
-  Actual_Class = as.factor(y_test)
-)
-
-# Create the plot
-ggplot(data = dnn_test_plot, 
-       aes(x = Individual, y = Probability_CKD, color = Actual_Class)) +
-  geom_point() +
-  theme_light(base_size = 14) +
-  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
-  xlab("Test observation") +
-  ylab("Probability of class with DNN") +
-  theme_minimal() +
-  geom_hline(yintercept = 0.5, linetype = "dashed")
-
-# ROC --------------------------------------------------------------------------
-roc_dnn <- roc(y_test, dnn_pred_prob[,2])
-plot(roc_dnn, main="ROC Curve for Optimal DNN Model")
 ```
 
 \pagebreak
@@ -1401,13 +1407,64 @@ ggplot(data = rf_test_plot, aes(x = Actual_Class,
   ylab("Probability of class with RF") +
   theme_minimal() +
   geom_hline(yintercept = 0.5, linetype = "dashed")
+
+
+
+# NN ROC -----------------------------------------------------------------------
+roc_nn <- roc(y_test, nn_pred_prob[,2])
+plot(roc_nn, main="ROC Curve for Optimal NN Model")
+
+# NN plot testing performance --------------------------------------------------
+# Convert the test set and predictions into a suitable dataframe for ggplot
+nn_test_plot <- data.frame(
+  Probability_Prob = nn_pred_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+ggplot(data = nn_test_plot, aes(x = Actual_Class,
+                                y = Probability_Prob,
+                                color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Probability of class with NN") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+
+
+
+# DNN ROC ----------------------------------------------------------------------
+roc_dnn <- roc(y_test, dnn_pred_prob[,2])
+plot(roc_dnn, main="ROC Curve for Optimal DNN Model")
+
+# DNN plot testing performance -------------------------------------------------
+# Convert the test set and predictions into a suitable dataframe for ggplot
+dnn_test_plot <- data.frame(
+  Probability_Prob = dnn_pred_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+ggplot(data = dnn_test_plot, aes(x = Actual_Class,
+                                 y = Probability_Prob,
+                                 color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Probability of class with DNN") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
 ```
 
+# Stuff to remove
 
 library(pdp) this library allow us to see the dependencies/Relation between variables. For example, we see with the first line of code that the dependency is not-lineal.
 In LR the relation was a line, and it was capable to capture this relation.
 
-```{r}
+```{r eval=FALSE}
 # Explore the relationship of the most important variable
 library(pdp)
 partial(rf_fit_final, pred.var = "hemo", which.class=2, plot = TRUE, prob=TRUE, rug = TRUE)
