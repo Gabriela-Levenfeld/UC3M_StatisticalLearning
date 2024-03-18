@@ -912,17 +912,19 @@ The evaluation of this model with the testing set achieved almost a perfect mode
 
 Same accuracy and kappa metrics has been obtained across different complexity parameters (`cp`). Therefore, the visual representation of the tuning process is omitted as it does not enhance the understanding of the model's performance. Instead, I will focus on the decision tree diagram coding thanks to the `rattle` package [@rattle_ref]. This interesting plot, illustrate the decision-making process of the model. It start with hemoglobin as the primary node for splitting the data with a threshold of $0.17$. Then the second node, based it decision on `sg` variable.
 
-```{r rpart_measures1, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
+```{r rpart_measures1, eval=FALSE}
+# Plot tuning hyper-parameter --------------------------------------------------
+plot(rpart_fit, main = 'Hyper-parameter tuning - DT rpart')
+```
+
+```{r rpart_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # DT visualization -------------------------------------------------------------
 fancyRpartPlot(rpart_fit$finalModel)
-
-# Plot tuning hyper-parameter --------------------------------------------------
-#plot(rpart_fit, main = 'Hyper-parameter tuning - DT rpart')
 ```
 
 In terms of variable importance, the **rpart** model has selected $7$ variables out of $24$ as relevant parameters. This represent less than a $30$% of the columns on the dataset. However, once again `hemo` belong to the top $3$ more important variables.
 
-```{r rpart_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
+```{r rpart_measures3, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 rpart_var_imp <- varImp(rpart_fit, scale=FALSE)
 plot(rpart_var_imp, main = "Variable importance for DT rpart")
@@ -974,7 +976,7 @@ The model tuning revealed that configuring the winnowing parameter as FALSE yiel
 plot(c50_fit, main = 'Hyper-parameter tuning - DT C5.0')
 ```
 
-Variable importance for the C5.0 model shows a limited set of variables, with only four out of twenty-four columns being significant. Hemoglobin (`hemo`) is the most critical feature and specific gravity (`sg`) follows as the second most important. The model also gives some relevance to blood glucose random (`bgr`) and albumin (`al`), however in a minor degree.
+Variable importance for the C5.0 model shows a limited set of variables, with only four out of twenty four columns being significant. Hemoglobin (`hemo`) is the most critical feature and specific gravity (`sg`) follows as the second most important. The model also gives some relevance to blood glucose random (`bgr`) and albumin (`al`), however in a minor degree.
 
 ```{r c50_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
@@ -984,19 +986,11 @@ plot(c50_var_imp, main="Variable importance for DT C5.0")
 
 ### Random Forests
 
-Random forest are a more advanced tools of DTs
-It also reduces overtting: for each node of the tree, consider only a random subset of predictors, m < p, for instance m = sqrt(p).
+Random forest are an evolution of decision tree, designed for enhancing model's performance by reducing overfitting. It involves creating multiple decision trees and aggregate the predictions of the trees in order to produce the final prediction. `caret` package only allow to tune the `mtry` parameter however I want to illustrate that it is possible to expand the search manually to find other parameters such as the `ntree` variable.
 
-How it works?
-1. Draw B bootstrap samples of size n: a decision tree for each bootstrap sample
-2. Grow each tree, by selecting a random set of m (out of p) features at each node, and choosing the best feature to split on
-3. Regression: Aggregate the predictions of the trees to produce the final prediction.
-
-Thus, `caret` library only allow to tune the `mtry` parameter I want to illustrate that it is possible to search for other parameters by coding manually the search. On this model, the search has been expanded for `ntree` parameter.
-
-```{r}
+```{r hide_train_rf, eval=FALSE}
 # Hyper-parameter search -------------------------------------------------------
-# mtry; nº of variables randomly choose for bulding the trees
+# mtry; nº of variables randomly choose for building the trees
 # Common practice for the grid is [1, sqrt(n_variables)]
 rf_grid <- expand.grid(mtry = c(1, 2, 3, 4, 5))
 
@@ -1014,6 +1008,7 @@ print(rf_fit)
 
 # Try different ntree values manually ------------------------------------------
 model_rf_list <- list()
+# Values I want to test (my search-space)
 testing_ntree_var <- seq(200, 1000, by = 100)
 
 for (ntree in testing_ntree_var){
@@ -1029,72 +1024,51 @@ for (ntree in testing_ntree_var){
 }
 
 results_rf_manually <- resamples(model_rf_list)
-#summary(results_rf_manually)
-# Best values: ntree = 1000
+summary(results_rf_manually)
 dotplot(results_rf_manually)
+# Best values: ntree = 1000
 
-# Final search with ntree=1000
+# Final search with ntree=1000 -------------------------------------------------
 rf_fit_final <- train(class ~.,
-                method = "rf",
-                data = training_transf,
-                ntree = 1000,
-                tuneGrid = rf_grid,
-                metric = "Accuracy",
-                trControl = ctrl)
+                      method = "rf",
+                      data = training_transf,
+                      ntree = 1000,
+                      tuneGrid = rf_grid,
+                      metric = "Accuracy",
+                      trControl = ctrl)
 
 print(rf_fit_final)
 
 # Save model -------------------------------------------------------------------
-saveRDS(rf_fit_final, file="pretrained_models/rf_fit_final.rds")
+saveRDS(rf_fit_final, file = "pretrained_models/rf_fit_final.rds")
+```
 
-# Predictions ------------------------------------------------------------------
-rf_predF = predict(rf_fit_final, X_test)
-rf_predF_prob = predict(rf_fit_final, X_test, type = "prob")
-# REVIEW: With prob predictions, we can vary the threshold
+```{r conf_matrix_rf}
+# Predictions on test ----------------------------------------------------------
+rf_predF <- predict(rf_fit_final, X_test)
+rf_predF_prob <- predict(rf_fit_final, X_test, type = "prob")
 
 # Performance measures ---------------------------------------------------------
 confusionMatrix(rf_predF, y_test)
 ```
 
-library(pdp) this library allow us to see the dependencies/Relation between variables. For example, we see with the first line of code that the dependency is not-lineal.
-In LR the relation was a line, and it was capable to capture this relation.
+When testing the final model on the test set, the random forest algorithm showed the most promising results until now, reflecting the strength of the learning. Indeed, the accuracy as well as the kappa is of $1$. Which might indicated that this model required a most complex dataset or/and the model is overfitting to the test data.
 
-```{r warning=FALSE, message=FALSE}
-# Plot tuning hyper-parameter --------------------------------------------------
-plot(rf_fit_final, main = 'Hyper-parameter tuning - Random Forest')
+**Performance of the model**.
 
+The visualization of hyper-parameter tuning is limited to the `mtry`. And we can observed an increase in accuracy when going from one to two predictors, indicating that considering at least two features at each split significantly enhances the model's. Also, it is clear than a higher values does not improve the model neither.
+
+```{r rf_measures1, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
+# Plot hyper-parameter tuning --------------------------------------------------
+plot(rf_fit_final, main = 'Hyper-parameter tuning - RF')
+```
+
+The variable importance plot again highlights hemoglobin (`hemo`) as a primary feature, consistent with earlier findings using other models. This reinforces the thought that hemoglobin levels are a probably the most important biomarker in the diagnosis of chronic kidney disease. The model also identifies other key variables that contribute significantly such as `pcv` or `sc`.
+
+```{r rf_measures2, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center', out.width="80%"}
 # Plot importance on training --------------------------------------------------
 rf_var_imp <- varImp(rf_fit_final, scale=FALSE)
-plot(rf_var_imp, main="Variable importance for Random Forest")
-
-# Explore the relationship of the most important variable
-library(pdp)
-partial(rf_fit_final, pred.var = "hemo", which.class=2, plot = TRUE, prob=TRUE, rug = TRUE)
-# Se pueden analizar más
-
-# Plot testing performance -----------------------------------------------------
-# Convert the test set and predictions into a suitable dataframe for ggplot
-rf_test_plot <- data.frame(
-  Individual = seq_along(y_test),
-  Probability_CKD = rf_predF_prob[,2],
-  Actual_Class = as.factor(y_test)
-)
-
-# Create the plot
-ggplot(data = rf_test_plot, aes(x = Individual, 
-                                 y = Probability_CKD, 
-                                 color = Actual_Class)) +
-  geom_point() +
-  theme_light(base_size = 14) +
-  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
-  xlab("Test observation") +
-  ylab("Probability of class with RF") +
-  theme_minimal() +
-  geom_hline(yintercept = 0.5, linetype = "dashed")
-
-# ROC --------------------------------------------------------------------------
-roc_rf <- roc(y_test, rf_predF_prob[,2])
-plot(roc_rf, main="ROC Curve for Optimal RF Model")
+plot(rf_var_imp, main="Variable importance for RF")
 ```
 
 ### Gradient Boosting
@@ -1304,7 +1278,7 @@ dotplot(models_compare, metric = "Accuracy",
         main = "Model Comparison based on Accuracy")
 ```
 
-```{r}
+```{r warning=FALSE, message=FALSE}
 # KNN ROC ----------------------------------------------------------------------
 roc_knn <- roc(y_test, knn_pred_prob[,2])
 plot(roc_knn, main = "ROC Curve for Optimal KNN Model")
@@ -1380,11 +1354,11 @@ ggplot(data = rpart_test_plot, aes(x = Actual_Class,
 
 
 
-# ROC --------------------------------------------------------------------------
+# DT-c5.0 ROC ------------------------------------------------------------------
 roc_c50 <- roc(y_test, c50_pred_prob[,2])
 plot(roc_c50, main="ROC Curve for Optimal DT-C5.0 Model")
 
-# Plot testing performance -----------------------------------------------------
+# DT-c5.0 plot testing performance --------------------------------------------
 # Convert the test set and predictions into a suitable dataframe for ggplot
 c50_test_plot <- data.frame(
   Probability_Prob = c50_pred_prob[,2],
@@ -1402,6 +1376,42 @@ ggplot(data = c50_test_plot, aes(x = Actual_Class,
   ylab("Probability of class with DT-C5.0") +
   theme_minimal() +
   geom_hline(yintercept = 0.5, linetype = "dashed")
+
+
+
+# RF ROC -----------------------------------------------------------------------
+roc_rf <- roc(y_test, rf_predF_prob[,2])
+plot(roc_rf, main="ROC Curve for Optimal RF Model")
+
+# RF plot testing performance --------------------------------------------------
+# Convert the test set and predictions into a suitable dataframe for ggplot
+rf_test_plot <- data.frame(
+  Probability_Prob = rf_predF_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+ggplot(data = rf_test_plot, aes(x = Actual_Class,
+                                y = Probability_Prob,
+                                color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Probability of class with RF") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+```
+
+
+library(pdp) this library allow us to see the dependencies/Relation between variables. For example, we see with the first line of code that the dependency is not-lineal.
+In LR the relation was a line, and it was capable to capture this relation.
+
+```{r}
+# Explore the relationship of the most important variable
+library(pdp)
+partial(rf_fit_final, pred.var = "hemo", which.class=2, plot = TRUE, prob=TRUE, rug = TRUE)
+# Se pueden analizar más
 ```
 
 
