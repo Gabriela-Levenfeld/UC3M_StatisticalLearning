@@ -1381,7 +1381,7 @@ for (threshold in seq(0.50,0.95,0.05)){
 boxplot(cost.i, main = "Threshold selection",
         ylab = "unit cost",
         xlab = "threshold value",
-        names = seq(0.50,0.95,0.05), col="royalblue2", las=2)
+        names = seq(0.50, 0.95, 0.05), col="royalblue2", las=2)
 
 # values around 0.2 are reasonable
 apply(cost.i, 2, median)
@@ -1439,7 +1439,7 @@ Until now, we have always explore the confusion matrix which a useful analytical
 
 ```{r scores_plots, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
 # KNN plot testing performance -----------------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 kkn_test_plot <- data.frame(
   Probability_Prob = knn_pred_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1544,6 +1544,27 @@ rf_plot <- ggplot(data = rf_test_plot,
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
 
+# xgb plot testing performance -------------------------------------------------
+# Dataframe for ggplot, the scores are nedded!
+xgb_test_plot <- data.frame(
+  Probability_Prob = xgb_pred_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+xgb_plot <- ggplot(data = xgb_test_plot,
+                   aes(x = Actual_Class,
+                       y = Probability_Prob,
+                       color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Score of class with XGB") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+
+
 # NN plot testing performance --------------------------------------------------
 # Dataframe for ggplot, the scores are nedded!
 nn_test_plot <- data.frame(
@@ -1587,7 +1608,7 @@ dnn_plot <- ggplot(data = dnn_test_plot,
 
 # Grid of 2x2
 grid.arrange(knn_plot, svm_plot, rpart_plot, c50_plot, ncol = 2, nrow = 2)
-grid.arrange(rf_plot, nn_plot, dnn_plot, ncol = 2, nrow = 2)
+grid.arrange(rf_plot, xgb_plot, nn_plot, dnn_plot, ncol = 2, nrow = 2)
 ```
 
 \pagebreak
