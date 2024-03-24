@@ -107,19 +107,20 @@ This section focuses on preparing the dataset for exploratory data analysis (EDA
 
 ```{r load_libraries, message=FALSE, warning=FALSE}
 library(skimr) # Summary statistics
-library(tidyverse) # Include ggplot2, dplyr, among others
-library(pander)
 library(caret) # Models
+library(rattle) # Display DT diagrams
 library(mice) # Imputation missing data
-library(VIM) # Plots for imputation perfoormance
+library(VIM) # Plots for imputation performance
 library(GGally) # Plots of the continuous variables
 library(psych) # Compute the skewness and correlation matrix
 library(polycor) # Compute correlation heatmap mix data type
-library(gridExtra) # For grid.arrange
 library(corrplot) # Correlation matrix
-library(reshape2) # Data reshaping (melt)
 library(pROC)
-library(rattle) # Display DT diagrams
+library(tidyverse) # Include ggplot2, dplyr, among others
+library(plotly) # Interactive plot
+library(reshape2) # Data reshaping (melt)
+library(gridExtra) # For grid.arrange
+library(pander) # Display simple tables
 ```
 
 **Load dataset**. The dataset was stored in an .arff format. To open the file, I made some arrangements using Python enviroment, I attached the code used in order to generate the .csv so I can work with during the rest of the project.
@@ -411,10 +412,10 @@ deeperExploration_vars <- training_imp[, c("hemo", "pcv", "rbcc", "class")]
 
 # Most correlate variables separate by target
 ggpairs(deeperExploration_vars,
-        aes(color = class, fill = class), # Apply color based on 'class'
-        lower = list(continuous = wrap("points", alpha = 0.5)), # Transparency
+        aes(color = class, fill = class),
+        lower = list(continuous = "points"),
         upper = list(continuous = "cor"),
-        diag = list(continuous = wrap("densityDiag", alpha = 0.5))
+        diag = list(continuous = "density")
 ) + 
   theme(legend.position = "bottom")
 ```
@@ -1381,7 +1382,7 @@ for (threshold in seq(0.50,0.95,0.05)){
 boxplot(cost.i, main = "Threshold selection",
         ylab = "unit cost",
         xlab = "threshold value",
-        names = seq(0.50,0.95,0.05), col="royalblue2", las=2)
+        names = seq(0.50, 0.95, 0.05), col="royalblue2", las=2)
 
 # values around 0.2 are reasonable
 apply(cost.i, 2, median)
@@ -1398,7 +1399,7 @@ best_threshold <- 0.95
 model_knnFit <- train(class ~ .,
                       method = "knn",
                       data = training_transf,
-                      tuneGrid = expand.grid(k = 3),
+                      tuneGrid = expand.grid(k = seq(3, 7, by=2)),
                       metric = "Accuracy",
                       trControl = ctrl2)
 
@@ -1413,6 +1414,15 @@ confusionMatrix(factor(final_predictions), testing_transf$class)
 ```
 
 As our initial though the quality of life of a patient is improved but we create a worse model regarding to the accuracy. However, due to the importance of correctly diagnose a patient in order to improve its life, there is no doubt that this model even though it makes more mistakes it is much beneficial. Final remark, it is that sometimes we must be really conservative when setting the threshold for trying to avoid false negative (specially in medical issues).
+
+**Initial model**.
+
+```{r initial_kknModel}
+# Initial model: Confusion matrix (threshold 0.5)
+# Predict probabilities on the test set
+pre_initial_mod <- predict(model_knnFit, newdata = testing_transf)
+confusionMatrix(pre_initial_mod, testing_transf$class)
+```
 
 \pagebreak
 # Conclusion
@@ -1439,7 +1449,7 @@ Until now, we have always explore the confusion matrix which a useful analytical
 
 ```{r scores_plots, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
 # KNN plot testing performance -----------------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 kkn_test_plot <- data.frame(
   Probability_Prob = knn_pred_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1460,7 +1470,7 @@ knn_plot <- ggplot(data = kkn_test_plot,
 
 
 # SVM plot testing performance -------------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 svm_test_plot <- data.frame(
   Probability_Prob = svm_pred_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1481,7 +1491,7 @@ svm_plot <- ggplot(data = svm_test_plot,
 
 
 # DT-rpart plot testing performance --------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 rpart_test_plot <- data.frame(
   Probability_Prob = rpart_pred_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1503,7 +1513,7 @@ rpart_plot <- ggplot(data = rpart_test_plot,
 
 
 # DT-c5.0 plot testing performance --------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 c50_test_plot <- data.frame(
   Probability_Prob = c50_pred_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1524,7 +1534,7 @@ c50_plot <- ggplot(data = c50_test_plot,
 
 
 # RF plot testing performance --------------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 rf_test_plot <- data.frame(
   Probability_Prob = rf_predF_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1544,8 +1554,29 @@ rf_plot <- ggplot(data = rf_test_plot,
   geom_hline(yintercept = 0.5, linetype = "dashed")
 
 
+# xgb plot testing performance -------------------------------------------------
+# Dataframe for ggplot, the scores are needed!
+xgb_test_plot <- data.frame(
+  Probability_Prob = xgb_pred_prob[,2],
+  Actual_Class = as.factor(y_test)
+)
+
+# Create the plot
+xgb_plot <- ggplot(data = xgb_test_plot,
+                   aes(x = Actual_Class,
+                       y = Probability_Prob,
+                       color = Actual_Class)) +
+  geom_point() +
+  theme_light(base_size = 14) +
+  scale_color_manual(values = c("notckd" = "deepskyblue2", "ckd" = "firebrick2")) +
+  xlab("Test observation") +
+  ylab("Score of class with XGB") +
+  theme_minimal() +
+  geom_hline(yintercept = 0.5, linetype = "dashed")
+
+
 # NN plot testing performance --------------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 nn_test_plot <- data.frame(
   Probability_Prob = nn_pred_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1566,7 +1597,7 @@ nn_plot <- ggplot(data = nn_test_plot,
 
 
 # DNN plot testing performance -------------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 dnn_test_plot <- data.frame(
   Probability_Prob = dnn_pred_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1587,66 +1618,59 @@ dnn_plot <- ggplot(data = dnn_test_plot,
 
 # Grid of 2x2
 grid.arrange(knn_plot, svm_plot, rpart_plot, c50_plot, ncol = 2, nrow = 2)
-grid.arrange(rf_plot, nn_plot, dnn_plot, ncol = 2, nrow = 2)
+grid.arrange(rf_plot, xgb_plot, nn_plot, dnn_plot, ncol = 2, nrow = 2)
 ```
 
 \pagebreak
-# Annex: ROC curves {#annex}
+# Annex: ROC curves
 
 ROC curve display for all models.
 
-```{r roc_plits, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
-# Compute ROCs
+```{r roc_plots, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+# ROC for each model
 roc_knn <- roc(y_test, knn_pred_prob[,2])
 roc_svm <- roc(y_test, svm_pred_prob[,2])
 roc_rpart <- roc(y_test, rpart_pred_prob[,2])
 roc_c50 <- roc(y_test, c50_pred_prob[,2])
 roc_rf <- roc(y_test, rf_predF_prob[,2])
+roc_xgb <- roc(y_test, xgb_pred_prob[,2])
 roc_nn <- roc(y_test, nn_pred_prob[,2])
 roc_dnn <- roc(y_test, dnn_pred_prob[,2])
 
-# df for using ggplot2
-df_roc_knn <- data.frame(t = roc_knn$thresholds, 
-                         sensitivity = roc_knn$sensitivities,
-                         specificity = roc_knn$specificities, model = 'KNN')
-df_roc_svm <- data.frame(t = roc_svm$thresholds, 
-                         sensitivity = roc_svm$sensitivities,
-                         specificity = roc_svm$specificities, model = 'SVM')
-df_roc_rpart <- data.frame(t = roc_rpart$thresholds, 
-                           sensitivity = roc_rpart$sensitivities,
-                           specificity = roc_rpart$specificities, model = 'DT-rpart')
-df_roc_c50 <- data.frame(t = roc_c50$thresholds,
-                         sensitivity = roc_c50$sensitivities,
-                         specificity = roc_c50$specificities, model = 'DT-C5.0')
-df_roc_rf <- data.frame(t = roc_rf$thresholds,
-                        sensitivity = roc_rf$sensitivities,
-                        specificity = roc_rf$specificities, model = 'RF')
-df_roc_nn <- data.frame(t = roc_nn$thresholds,
-                        sensitivity = roc_nn$sensitivities, 
-                        specificity = roc_nn$specificities, model = 'NN')
-df_roc_dnn <- data.frame(t = roc_dnn$thresholds,
-                         sensitivity = roc_dnn$sensitivities,
-                         specificity = roc_dnn$specificities, model = 'DNN')
+# Create a list of ROC objects
+roc_list <- list(
+  KNN = roc_knn,
+  SVM = roc_svm,
+  DT_rpart = roc_rpart,
+  DT_C50 = roc_c50,
+  RF = roc_rf,
+  xGB = roc_xgb,
+  NN = roc_nn,
+  DNN = roc_dnn
+)
 
-# Combine all ROCs
-roc_data <- bind_rows(df_roc_knn,
-                      df_roc_svm, 
-                      df_roc_rpart, 
-                      df_roc_c50,
-                      df_roc_rf,
-                      df_roc_nn,
-                      df_roc_dnn)
+roc_data <- data.frame() # Empty df
 
-# Plot them
-ggplot(roc_data, aes(x = 1 - specificity, y = sensitivity, color = model)) + 
-  geom_line() + 
-  theme_minimal() + 
-  labs(title = "ROC Curves Comparison",
-       x = "1 - Specificity",
-       y = "Sensitivity") +
-  scale_color_manual(values = c("KNN" = "red", "SVM" = "blue", "DT-rpart" = "green", "DT-C5.0" = "orange", "RF" = "purple", "NN" = "brown", "DNN" = "pink")) +
-  geom_abline(linetype = "dashed", color = "gray50") +
-  theme(legend.title = element_blank(), 
-        legend.position = "bottom",
-        plot.title = element_text(hjust = 0.5))
+# Iterate over each model and bind the data
+for (model_name in names(roc_list)) {
+  model_roc <- roc_list[[model_name]]
+  model_df <- data.frame(
+    Specificity = 1 - model_roc$specificities,
+    Sensitivity = model_roc$sensitivities,
+    Model = model_name
+  )
+  roc_data <- rbind(roc_data, model_df)
+}
+
+# Convert into factor model column
+roc_data$Model <- factor(roc_data$Model)
+
+# Plot ROC curves
+fig <- plot_ly(roc_data, x = ~Specificity, y = ~Sensitivity, color = ~Model, type = 'scatter', mode = 'lines') %>%
+  layout(title = "ROC Curves comparison",
+         xaxis = list(title = "1 - Specificity", zeroline = FALSE),
+         yaxis = list(title = "Sensitivity", zeroline = FALSE),
+         legend = list(x = 1, y = 0, xanchor = 'right', yanchor = 'bottom'))
+
+fig # Print the plot
 ```
