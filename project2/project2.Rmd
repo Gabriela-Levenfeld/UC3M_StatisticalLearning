@@ -120,6 +120,7 @@ library(corrplot) # Correlation matrix
 library(reshape2) # Data reshaping (melt)
 library(pROC)
 library(rattle) # Display DT diagrams
+library(plotly) # Interactive plot
 ```
 
 **Load dataset**. The dataset was stored in an .arff format. To open the file, I made some arrangements using Python enviroment, I attached the code used in order to generate the .csv so I can work with during the rest of the project.
@@ -1625,58 +1626,51 @@ grid.arrange(rf_plot, xgb_plot, nn_plot, dnn_plot, ncol = 2, nrow = 2)
 
 ROC curve display for all models.
 
-```{r roc_plits, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
-# Compute ROCs
+```{r roc_plots, echo=FALSE, warning=FALSE, message=FALSE, fig.align='center'}
+# ROC for each model
 roc_knn <- roc(y_test, knn_pred_prob[,2])
 roc_svm <- roc(y_test, svm_pred_prob[,2])
 roc_rpart <- roc(y_test, rpart_pred_prob[,2])
 roc_c50 <- roc(y_test, c50_pred_prob[,2])
 roc_rf <- roc(y_test, rf_predF_prob[,2])
+roc_xgb <- roc(y_test, xgb_pred_prob[,2])
 roc_nn <- roc(y_test, nn_pred_prob[,2])
 roc_dnn <- roc(y_test, dnn_pred_prob[,2])
 
-# df for using ggplot2
-df_roc_knn <- data.frame(t = roc_knn$thresholds, 
-                         sensitivity = roc_knn$sensitivities,
-                         specificity = roc_knn$specificities, model = 'KNN')
-df_roc_svm <- data.frame(t = roc_svm$thresholds, 
-                         sensitivity = roc_svm$sensitivities,
-                         specificity = roc_svm$specificities, model = 'SVM')
-df_roc_rpart <- data.frame(t = roc_rpart$thresholds, 
-                           sensitivity = roc_rpart$sensitivities,
-                           specificity = roc_rpart$specificities, model = 'DT-rpart')
-df_roc_c50 <- data.frame(t = roc_c50$thresholds,
-                         sensitivity = roc_c50$sensitivities,
-                         specificity = roc_c50$specificities, model = 'DT-C5.0')
-df_roc_rf <- data.frame(t = roc_rf$thresholds,
-                        sensitivity = roc_rf$sensitivities,
-                        specificity = roc_rf$specificities, model = 'RF')
-df_roc_nn <- data.frame(t = roc_nn$thresholds,
-                        sensitivity = roc_nn$sensitivities, 
-                        specificity = roc_nn$specificities, model = 'NN')
-df_roc_dnn <- data.frame(t = roc_dnn$thresholds,
-                         sensitivity = roc_dnn$sensitivities,
-                         specificity = roc_dnn$specificities, model = 'DNN')
+# Create a list of ROC objects
+roc_list <- list(
+  KNN = roc_knn,
+  SVM = roc_svm,
+  DT_rpart = roc_rpart,
+  DT_C50 = roc_c50,
+  RF = roc_rf,
+  xGB = roc_xgb,
+  NN = roc_nn,
+  DNN = roc_dnn
+)
 
-# Combine all ROCs
-roc_data <- bind_rows(df_roc_knn,
-                      df_roc_svm, 
-                      df_roc_rpart, 
-                      df_roc_c50,
-                      df_roc_rf,
-                      df_roc_nn,
-                      df_roc_dnn)
+roc_data <- data.frame() # Empty df
 
-# Plot them
-ggplot(roc_data, aes(x = 1 - specificity, y = sensitivity, color = model)) + 
-  geom_line() + 
-  theme_minimal() + 
-  labs(title = "ROC Curves Comparison",
-       x = "1 - Specificity",
-       y = "Sensitivity") +
-  scale_color_manual(values = c("KNN" = "red", "SVM" = "blue", "DT-rpart" = "green", "DT-C5.0" = "orange", "RF" = "purple", "NN" = "brown", "DNN" = "pink")) +
-  geom_abline(linetype = "dashed", color = "gray50") +
-  theme(legend.title = element_blank(), 
-        legend.position = "bottom",
-        plot.title = element_text(hjust = 0.5))
+# Iterate over each model and bind the data
+for (model_name in names(roc_list)) {
+  model_roc <- roc_list[[model_name]]
+  model_df <- data.frame(
+    Specificity = 1 - model_roc$specificities,
+    Sensitivity = model_roc$sensitivities,
+    Model = model_name
+  )
+  roc_data <- rbind(roc_data, model_df)
+}
+
+# Convert into factor model column
+roc_data$Model <- factor(roc_data$Model)
+
+# Plot ROC curves
+fig <- plot_ly(roc_data, x = ~Specificity, y = ~Sensitivity, color = ~Model, type = 'scatter', mode = 'lines') %>%
+  layout(title = "ROC Curves comparison",
+         xaxis = list(title = "1 - Specificity", zeroline = FALSE),
+         yaxis = list(title = "Sensitivity", zeroline = FALSE),
+         legend = list(x = 1, y = 0, xanchor = 'right', yanchor = 'bottom'))
+
+fig # Print the plot
 ```
