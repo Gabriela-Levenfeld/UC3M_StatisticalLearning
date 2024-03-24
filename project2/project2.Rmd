@@ -1460,7 +1460,7 @@ knn_plot <- ggplot(data = kkn_test_plot,
 
 
 # SVM plot testing performance -------------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 svm_test_plot <- data.frame(
   Probability_Prob = svm_pred_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1481,7 +1481,7 @@ svm_plot <- ggplot(data = svm_test_plot,
 
 
 # DT-rpart plot testing performance --------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 rpart_test_plot <- data.frame(
   Probability_Prob = rpart_pred_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1503,7 +1503,7 @@ rpart_plot <- ggplot(data = rpart_test_plot,
 
 
 # DT-c5.0 plot testing performance --------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 c50_test_plot <- data.frame(
   Probability_Prob = c50_pred_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1524,7 +1524,7 @@ c50_plot <- ggplot(data = c50_test_plot,
 
 
 # RF plot testing performance --------------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 rf_test_plot <- data.frame(
   Probability_Prob = rf_predF_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1545,7 +1545,7 @@ rf_plot <- ggplot(data = rf_test_plot,
 
 
 # xgb plot testing performance -------------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 xgb_test_plot <- data.frame(
   Probability_Prob = xgb_pred_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1566,7 +1566,7 @@ xgb_plot <- ggplot(data = xgb_test_plot,
 
 
 # NN plot testing performance --------------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 nn_test_plot <- data.frame(
   Probability_Prob = nn_pred_prob[,2],
   Actual_Class = as.factor(y_test)
@@ -1587,7 +1587,7 @@ nn_plot <- ggplot(data = nn_test_plot,
 
 
 # DNN plot testing performance -------------------------------------------------
-# Dataframe for ggplot, the scores are nedded!
+# Dataframe for ggplot, the scores are needed!
 dnn_test_plot <- data.frame(
   Probability_Prob = dnn_pred_prob[,2],
   Actual_Class = as.factor(y_test)
