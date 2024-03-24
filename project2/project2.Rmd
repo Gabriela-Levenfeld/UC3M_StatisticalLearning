@@ -1398,7 +1398,7 @@ best_threshold <- 0.95
 model_knnFit <- train(class ~ .,
                       method = "knn",
                       data = training_transf,
-                      tuneGrid = expand.grid(k = 3),
+                      tuneGrid = expand.grid(k = seq(3, 7, by=2)),
                       metric = "Accuracy",
                       trControl = ctrl2)
 
@@ -1413,6 +1413,15 @@ confusionMatrix(factor(final_predictions), testing_transf$class)
 ```
 
 As our initial though the quality of life of a patient is improved but we create a worse model regarding to the accuracy. However, due to the importance of correctly diagnose a patient in order to improve its life, there is no doubt that this model even though it makes more mistakes it is much beneficial. Final remark, it is that sometimes we must be really conservative when setting the threshold for trying to avoid false negative (specially in medical issues).
+
+**Initial model**.
+
+```{r initial_kknModel}
+# Initial model: Confusion matrix (threshold 0.5)
+# Predict probabilities on the test set
+pre_initial_mod <- predict(model_knnFit, newdata = testing_transf)
+confusionMatrix(pre_initial_mod, testing_transf$class)
+```
 
 \pagebreak
 # Conclusion
@@ -1612,7 +1621,7 @@ grid.arrange(rf_plot, xgb_plot, nn_plot, dnn_plot, ncol = 2, nrow = 2)
 ```
 
 \pagebreak
-# Annex: ROC curves {#annex}
+# Annex: ROC curves
 
 ROC curve display for all models.
 
